@@ -2,7 +2,6 @@
 
 ![MK90](https://raw.githubusercontent.com/Bs0Dd/MK90-projs/master/title.jpg)
 
-<br><br>
 
 * [Сборник игр и уроков языка БЕЙСИК (пропатчен)](https://github.com/Bs0Dd/MK90-projs/tree/master/MK90GAMES)
 * [Сборник игр Сергея "SER" Сургутского](https://github.com/Bs0Dd/MK90-projs/tree/master/SER)
