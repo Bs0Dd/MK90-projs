@@ -1,0 +1,52 @@
+; auto-start of BASIC programs (HEX) - DEV mod by Bs0Dd [bs0dd.net]
+; BASIC 1.0 version
+
+	.radix	16
+
+	.loc	0
+
+	nop			;obligatory!
+	bic	#FFFE,r5	;slot number
+	movb r5,stor
+	mov	#cmd,r1
+	br start
+
+	.loc	100
+
+start:
+; system initialisation code copied from the ROM
+	mov	#100,r2
+ini1:	clr	-(r2)
+	mov	#8006,-(r2)
+	tst	r2
+	bne	ini1
+	mov	#5F,(r2)+
+	mov	#9D12,(r2)+	;vector of the BASIC system start
+	mov	#806A,@#1C	;vector TRAP
+	jsr	pc,@#D7C0	;RAM initialisation
+	trap	6C
+	mov	#2F3E,r1
+	mov	r1,sp
+	mov	r1,@#3810
+	mov	#100,r5
+	mov	r5,@#38EC
+	movb	#A,(r5)+
+	clr	@#38FA
+	clr	@#38EE
+; copy the command to the input line buffer
+	mov	#3898,r3
+	mov	#cmd,r2
+	mov	r3,r1
+cpy1:	movb	(r2)+,(r3)+
+	bne	cpy1
+	movb stor,3900 ;same as 'DEV "SMx:"'
+	jmp	@#867E
+stor:
+	.byte	0,0
+
+	.loc	1A0
+
+cmd:	.ascii	'LOAD"AUTO.RUN",R'
+	.byte	A,0
+
+	.loc	200

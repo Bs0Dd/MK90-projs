@@ -1,0 +1,52 @@
+; auto-start of BASIC programs (OCT) - DEV mod by Bs0Dd [bs0dd.net]
+; BASIC 1.0 version
+
+	.radix	8
+
+	.loc	0
+
+	nop			;obligatory!
+	bic	#177776,r5	;slot number
+	movb r5,stor
+	mov	#cmd,r1
+	br start
+
+	.loc	400
+
+start:
+; system initialisation code copied from the ROM
+	mov	#400,r2
+ini1:	clr	-(r2)
+	mov	#100006,-(r2)
+	tst	r2
+	bne	ini1
+	mov	#137,(r2)+
+	mov	#116422,(r2)+	;vector of the BASIC system start
+	mov	#100152,@#34	;vector TRAP
+	jsr	pc,@#153700	;RAM initialisation
+	trap	154
+	mov	#27476,r1
+	mov	r1,sp
+	mov	r1,@#34020
+	mov	#400,r5
+	mov	r5,@#34354
+	movb	#12,(r5)+
+	clr	@#34372
+	clr	@#34356
+; copy the command to the input line buffer
+	mov	#34230,r3
+	mov	#cmd,r2
+	mov	r3,r1
+cpy1:	movb	(r2)+,(r3)+
+	bne	cpy1
+	movb stor,34400 ;same as 'DEV "SMx:"'
+	jmp	@#103176
+stor:
+	.byte	0,0
+
+	.loc	640
+
+cmd:	.ascii	'LOAD"AUTO.RUN",R'
+	.byte	12,0
+
+	.loc	1000
