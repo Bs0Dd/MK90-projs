@@ -1,0 +1,136 @@
+; Patched Tsvetotron games pack
+; differences from original image (HEX system)
+; Bs0Dd [bs0dd.net]
+
+; Loader 1 (main)
+0002:	br 00B0   ;br 0020 ; inserted code
+
+0040:	jsr pc,00D8   ;movb #F9,@#E814   ;writing to the SMP1 -> AutoSMP subrout - writing
+0044:	nop   ;3w -> 2w operation
+006A:	jsr pc,00D8   ;movb #F9,@#E814   ;writing to the SMP1 -> AutoSMP subrout - writing
+006E:	nop   ;3w -> 2w operation
+007A:	jsr pc,00D0   ;movb #F1,@#E814   ;reading from the SMP1 -> AutoSMP subrout - reading
+007E:	nop   ;3w -> 2w operation
+
+00AE:	.blkw 1   ;SMP number storage
+
+
+; Store current SMP number from r5 (first run only)
+00B0:	cmp @#AE,#0
+00B6:	bne 0020   ;back to loader
+00B8:	mov r5,@#AE
+00BC:	br 0020   ;back to loader
+
+
+; AutoSMP subrout
+00D0:	bic #8,@#AE   ;set read mode for current SMP
+00D6:	br 00DE
+00D8:	bis #8,@#AE   ;set write mode for current SMP
+00DE:	mov @#AE,@#E814
+00E4:	rts pc
+
+
+; -------------------
+; 05EE RAM = 15EE ROM
+
+; Loader 2 (software lists loading)
+05EE:	jsr pc,00D8   ;movb #F9,@#E814   ;writing to the SMP1 -> AutoSMP subrout - writing
+05F2:	nop   ;3w -> 2w operation
+0624:	jsr pc,00D8   ;movb #F9,@#E814   ;writing to the SMP1 -> AutoSMP subrout - writing
+0628:	nop   ;3w -> 2w operation
+0634:	jsr pc,00D0   ;movb #F1,@#E814   ;reading from the SMP1 -> AutoSMP subrout - reading
+0638:	nop   ;3w -> 2w operation
+
+
+; Top-bottom borders drawing pseudo-subrout
+; 09F2-0A0A
+0A0A:	rts pc   ;mov #13C3,r0 ;organize pseudo-subrout
+0A0C:	.word 13C3   ;second word from old operation
+
+
+; Left-right borders drawing pseudo-subrout
+; 0AE4-0B1C
+0B1C:	rts pc   ;mov #121E,r0 ;organize pseudo-subrout
+0B1E:	.word 121E   ;second word from old operation
+
+
+; Sound enable dialog pseudo-subrout
+; 0D48-0DD8
+0DD8:	rts pc   ;jsr pc,10FA ;organize pseudo-subrout
+0DDA:	.word 031E   ;second word from old operation
+
+
+; Initialization subrout
+; 118C-11E6
+11B2:	tstb @#93   ;rts pc  ;@#93 = 00 - first run, @#93 = 3F - skip dialog
+11B6:	bne 11C8
+11B8:	jsr pc,04A6   ;Clear screen
+11BC:	jsr pc,09F2   ;Draw top-bottom borders
+11C0:	jsr pc,0AE4   ;Draw left-right borders
+11C4:	jsr pc,0D48   ;Sound enable dialog
+11C8:	mov #15C0,@#A0A   ;Restore old operation at 0A0A
+11CE:	mov #15C0,@#B1C   ;Restore old operation at 0B1C
+11D4:	mov #9F7,@#DD8   ;Restore old operation at 0DD8
+11DA:	tstb @#92   ;@#92 = 00 - sound enabled, @#92 = FF - sound disabled
+11DE:	beq 11E6
+11E0:	movb #3F,@#93   ;Disable slow welcome splash drawing
+11E6:	rts pc
+
+
+; Games zone - sound fix by Piotr Piątek
+; Changes frequency for pause "sound" to avoid problems on some MK90 with BASIC 1.0
+
+; Tetris
+; 0DE4 RAM = 2DE4 ROM
+0DE4:	mov #3E8,r3   ;mov #7D0,r3
+0DEA:	mov #64,r3   ;mov #C8,r3
+0DF6:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Pac-Man
+; 1E80 RAM = 54A0 ROM
+1E80:	mov #3E8,r3   ;mov #7D0,r3
+1E86:	mov #64,r3   ;mov #C8,r3
+1E92:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Boxing
+; 1F6E RAM = B948 ROM
+1F6E:	mov #3E8,r3   ;mov #7D0,r3
+1F74:	mov #64,r3   ;mov #C8,r3
+1F80:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Puzzle
+; 165C RAM = DF58 ROM
+165C:	mov #3E8,r3   ;mov #7D0,r3
+1662:	mov #64,r3   ;mov #C8,r3
+166E:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Snake
+; 0EB6 RAM = ED8C ROM
+0EB6:	mov #3E8,r3   ;mov #7D0,r3
+0EBC:	mov #64,r3   ;mov #C8,r3
+0EC8:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Space
+; 0F1A RAM = 10E96 ROM
+0F1A:	mov #3E8,r3   ;mov #7D0,r3
+0F20:	mov #64,r3   ;mov #C8,r3
+0F2C:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Pong
+; 19B6 RAM = 13CC2 ROM
+19B6:	mov #3E8,r3   ;mov #7D0,r3
+19BC:	mov #64,r3   ;mov #C8,r3
+19C8:	mov #A,@#E812   ;mov #1,@#E812
+
+
+; Tower of Hanoi
+; 1B40 RAM = 160BC ROM
+1B40:	mov #3E8,r3   ;mov #7D0,r3
+1B46:	mov #64,r3   ;mov #C8,r3
+1B52:	mov #A,@#E812   ;mov #1,@#E812

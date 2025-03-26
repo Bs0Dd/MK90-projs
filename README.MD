@@ -1,0 +1,9 @@
+# Проекты для Электроники МК 90
+
+![MK90](https://raw.githubusercontent.com/Bs0Dd/MK90-projs/master/title.jpg)
+
+<br><br>
+
+* [Сборник игр и уроков языка БЕЙСИК (пропатчен)](https://github.com/Bs0Dd/MK90-projs/tree/master/MK90GAMES)
+* [Сборник игр Сергея "SER" Сургутского](https://github.com/Bs0Dd/MK90-projs/tree/master/SER)
+* [Отреставрированное руководство по эксплуатации (BASIC 1.0)](https://raw.githubusercontent.com/Bs0Dd/MK90-projs/master/MANUAL/mk90man.pdf)

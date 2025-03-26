@@ -1,0 +1,136 @@
+; Patched Tsvetotron games pack
+; differences from original image (OCT system)
+; Bs0Dd [bs0dd.net]
+
+; Loader 1 (main)
+000002:	br 000260   ;br 000040 ; inserted code
+
+000100:	jsr pc,000330   ;movb #371,@#164024   ;writing to the SMP1 -> AutoSMP subrout - writing
+000104:	nop   ;3w -> 2w operation
+000152:	jsr pc,000330   ;movb #371,@#164024   ;writing to the SMP1 -> AutoSMP subrout - writing
+000156:	nop   ;3w -> 2w operation
+000172:	jsr pc,000320   ;movb #361,@#164024   ;reading from the SMP1 -> AutoSMP subrout - reading
+000176:	nop   ;3w -> 2w operation
+
+000256:	.blkw 1   ;SMP number storage
+
+
+; Store current SMP number from r5 (first run only)
+000260:	cmp @#256,#0
+000266:	bne 000040   ;back to loader
+000270:	mov r5,@#256
+000274:	br 000040   ;back to loader
+
+
+; AutoSMP subrout
+000320:	bic #10,@#256   ;set read mode for current SMP
+000326:	br 000336
+000330:	bis #10,@#256   ;set write mode for current SMP
+000336:	mov @#256,@#164024
+000344:	rts pc
+
+
+; -----------------------
+; 002756 RAM = 012756 ROM
+
+; Loader 2 (software lists loading)
+002756:	jsr pc,000330   ;movb #371,@#164024   ;writing to the SMP1 -> AutoSMP subrout - writing
+002762:	nop   ;3w -> 2w operation
+003044:	jsr pc,000330   ;movb #371,@#164024   ;writing to the SMP1 -> AutoSMP subrout - writing
+003050:	nop   ;3w -> 2w operation
+003064:	jsr pc,000320   ;movb #361,@#164024   ;reading from the SMP1 -> AutoSMP subrout - reading
+003070:	nop   ;3w -> 2w operation
+
+
+; Top-bottom borders drawing pseudo-subrout
+; 004762-005012
+005012:	rts pc   ;mov #11703,r0 ;organize pseudo-subrout
+005014:	.word 11703   ;second word from old operation
+
+
+; Left-right borders drawing pseudo-subrout
+; 005344-005434
+005434:	rts pc   ;mov #11036,r0 ;organize pseudo-subrout
+005436:	.word 11036   ;second word from old operation
+
+
+; Sound enable dialog pseudo-subrout
+; 006510-006730
+006730:	rts pc   ;jsr pc,010372 ;organize pseudo-subrout
+006732:	.word 1436   ;second word from old operation
+
+
+; Initialization subrout
+; 010614-010746
+010662:	tstb @#223   ;rts pc  ;@#223 = 000 - first run, @#223 = 077 - skip dialog
+010666:	bne 010710
+010670:	jsr pc,002246   ;Clear screen
+010674:	jsr pc,004762   ;Draw top-bottom borders
+010700:	jsr pc,005344   ;Draw left-right borders
+010704:	jsr pc,006510   ;Sound enable dialog
+010710:	mov #12700,@#5012   ;Restore old operation at 005012
+010716:	mov #12700,@#5434   ;Restore old operation at 005434
+010724:	mov #4767,@#6730   ;Restore old operation at 006730
+010732:	tstb @#222   ;@#222 = 000 - sound enabled, @#222 = 377 - sound disabled
+010736:	beq 010746
+010740:	movb #77,@#223   ;Disable slow welcome splash drawing
+010746:	rts pc
+
+
+; Games zone - sound fix by Piotr Piątek
+; Changes frequency for pause "sound" to avoid problems on some MK90 with BASIC 1.0
+
+; Tetris
+; 006744 RAM = 026744 ROM
+006744:	mov #1750,r3   ;mov #3720,r3
+006752:	mov #144,r3   ;mov #310,r3
+006766:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Pac-Man
+; 017200 RAM = 52240 ROM
+017200:	mov #1750,r3   ;mov #3720,r3
+017206:	mov #144,r3   ;mov #310,r3
+017222:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Boxing
+; 017556 RAM = 134510 ROM
+017556:	mov #1750,r3   ;mov #3720,r3
+017564:	mov #144,r3   ;mov #310,r3
+017600:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Puzzle
+; 013134 RAM = 157530 ROM
+013134:	mov #1750,r3   ;mov #3720,r3
+013142:	mov #144,r3   ;mov #310,r3
+013156:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Snake
+; 007266 RAM = 166614 ROM
+007266:	mov #1750,r3   ;mov #3720,r3
+007274:	mov #144,r3   ;mov #310,r3
+007310:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Space
+; 007432 RAM = 207226 ROM
+007432:	mov #1750,r3   ;mov #3720,r3
+007440:	mov #144,r3   ;mov #310,r3
+007454:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Pong
+; 014666 RAM = 236302 ROM
+014666:	mov #1750,r3   ;mov #3720,r3
+014674:	mov #144,r3   ;mov #310,r3
+014710:	mov #12,@#164022   ;mov #1,@#164022
+
+
+; Tower of Hanoi
+; 015500 RAM = 260274 ROM
+015500:	mov #1750,r3   ;mov #3720,r3
+015506:	mov #144,r3   ;mov #310,r3
+015522:	mov #12,@#164022   ;mov #1,@#164022
