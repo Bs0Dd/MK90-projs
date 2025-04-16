@@ -2,9 +2,7 @@
 
 all: 
 	macro11 genmpo.mac -o genmpo.obj
-	obj2bin.pl --rt11 --binary --nocrc --bytes=100000 --outfile=gmp.bin genmpo.obj
-	dd if=gmp.bin of=genmpo.bin bs=1 skip=6
-	rm gmp.bin
+	obj2bin.pl --rt11 --binary --bytes=100000 --outfile=- genmpo.obj | tail -c +7 | head -c -8 > genmpo.bin
 
 clean:
 	rm -f genmpo.obj

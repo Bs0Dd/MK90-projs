@@ -34,8 +34,8 @@ bas1:
 	
 	mov #27476, sp   ; Move stack to nearly end of RAM
 	
-	mov	#END-EMULS, r4		;number of bytes
-	mov	#EMULS, r3
+	mov	#END-774, r4		;number of bytes
+	mov	#774, r3
 	
 	call @#LOADR
 	
@@ -48,9 +48,9 @@ LOADR:
 	mov	r5,(r1)
 	mov	#240, @#SMPCMD	;Write Address
 	jsr	pc,(r2)
-	movb LDADR+1, @#SMPIO	;high address byte
+	movb LDADR+1, @#SMPIO	;high address byte 
 	jsr	pc,(r2)
-	movb LDADR, @#SMPIO	;high address byte
+	movb LDADR, @#SMPIO	;low address byte
 	jsr	pc, (r2)
 	tst	@#SMPCMD
 	jsr	pc, (r2)
@@ -69,7 +69,7 @@ nxtb:
 	rts pc
 	
 LDADR:
-	.word EMULS
+	.word 774 ;(start from o774 to restore data smashed by the stack)
 
 	
 ;adresses for BASIC 1.0 (used by default)
