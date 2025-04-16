@@ -64,6 +64,7 @@ nxtb:
 	movb @#SMPIO, (r3)+	;read data byte from the SMP to the RAM
 	jsr	pc, (r2)
 	sob	r4, nxtb		;next data byte
+smpdone: ; Addition from issue to fix keyboard, thanks Piotr
 	tst	@#SMPCMD
 	jsr	pc, (r2)
 	rts pc
@@ -164,12 +165,8 @@ lsloop:
 	bhis lsdone ; and go out
 	inc r3	; otherwise increment address 
     br lsloop ; and go on
-lsdone: 
-	; Addition from issue #5 to fix keyboard, thanks Piotr
-	tst @#SMPCMD
-	jsr pc,(r2)
-	
-	rts pc ; END EMULS
+lsdone:
+	br smpdone
 
 EMUSEL:
 	; Set the emulated file name - zero terminated in r3
@@ -189,10 +186,7 @@ selloop:
 	inc r3
 	br selloop
 seldone:
-	; Addition from issue #5 to fix keyboard, thanks Piotr
-	tst @#SMPCMD
-	jsr pc,(r2)
-	rts pc ; END EMUSEL
+	br smpdone
 
 
 	; ---------------------------
@@ -235,15 +229,14 @@ isshort:
 	cmpb #24, r2 ;".BIN" shortcut (PgDn button)
 	bne waitkey
 	mov #cartBin, r1
-	mov #4, r3
 cpbin:
-	movb (r1), r2
-	jsr	pc,@PUTCH	;display character r2
-	movb (r1)+,(r4)+
 	cmp r4, #varArray+13
 	bgt waitkey 
-	sob r3, cpbin
-	br waitkey
+	movb (r1), r2
+	beq waitkey
+	jsr	pc,@PUTCH	;display character r2
+	movb (r1)+,(r4)+
+	br cpbin
 del:
 	cmp #varArray, r4 ; empty buf? stop erasing!
 	beq waitkey
@@ -277,7 +270,6 @@ start:
 	
 	mov KBVECT, @#310
 
-	inc @DISIND ; disable SU, FK, VR/NR and RUS/LAT indication!
 	inc @DISCURS ; disable cursor
 
 	; LCD controller initialisation
@@ -296,7 +288,6 @@ start:
 	bic #41, @PRINTATTRS
 
 	; Retrieve array of file names
-	clr r0 ; SMP0
 	call EMULS
 	; Print the List, stopping each 5 rows
 	mov #varArray, r1
@@ -315,7 +306,9 @@ prntmoar:
 	mov r1, -(SP)
 	mov #cartMoar, r1
 	CALL @PRINT
+	inc @DISIND ; disable SU, FK, VR/NR and RUS/LAT indication!
 	CALL @GETCH
+	dec @DISIND ; enable indication (for B2.0 to preserve header line)
 	mov (SP)+, r1
 	mov #7, r3
 prntcrlf:
@@ -335,14 +328,15 @@ doneprntn:
 	mov #cartMsgFilename, r1
 	call @PRINT
 	
+	inc @DISIND
 	mov #varArray, r4
 	call INSTR
 	clrb (r4)
 
-	clr r0 ; SMP0
 	mov #varArray, r3
 	call EMUSEL
 
+	dec @DISIND
 	mov #cartCrlf, r1
 	CALL @PRINT
 	
@@ -372,7 +366,7 @@ copyloop:
 	jsr	pc,(r2)
 	movb LDADR+1, @#SMPIO	;high address byte
 	jsr	pc,(r2)
-	movb LDADR, @#SMPIO	;high address byte
+	movb LDADR, @#SMPIO	;low address byte
 	jsr	pc, (r2)
 	tst	@#SMPCMD
 	jsr	pc, (r2)
@@ -385,10 +379,10 @@ sendoop:
 	inc r3
 	cmp r3, #12000
 	bne sendoop
-	tst @#SMPCMD ; Fix disabled keyb!
-	jsr pc,(r2)
 	
+	call smpdone
 	call @#SWSMP
+	
 	incb @#cartZap+12
 	add #2000, @#LDADR
 	cmp @#LDADR, #24000
@@ -396,6 +390,10 @@ sendoop:
 	
 	mov #cartDone, r1
 	call @PRINT
+	
+	mov #cartArun, r3 ; mount AUTORUN.BIN 
+	call EMUSEL
+	
 	CALL TNYDLY
 	
 	jmp @#173000 ; Reboot!
@@ -410,8 +408,11 @@ cartTitle:
 cartMoar:
 	.ascii " [BK]"
 	.byte 15, 0
+cartArun:
+	.ascii "AUTORUN"
 cartBin:
 	.ascii ".BIN"
+	.byte 0
 cartCrlf:
 	.byte 12,15,0
 cartMsgFilename:
