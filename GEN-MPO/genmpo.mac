@@ -162,11 +162,9 @@ lsloop:
 	jsr pc, (r2)
 	movb (r3), r4
 	cmpb r4, #377 ; check if last one 0xFF
-	bhis lsdone ; and go out
+	bhis smpdone ; and go out
 	inc r3	; otherwise increment address 
     br lsloop ; and go on
-lsdone:
-	br smpdone
 
 EMUSEL:
 	; Set the emulated file name - zero terminated in r3
@@ -182,11 +180,9 @@ selloop:
 	movb (r3), @#SMPIO
 	jsr	pc,(r2)
 	tstb (r3)
-	beq seldone
+	beq smpdone
 	inc r3
 	br selloop
-seldone:
-	br smpdone
 
 
 	; ---------------------------
