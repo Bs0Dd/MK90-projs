@@ -1,0 +1,1051 @@
+	; BASIC 2.0 tests for 1.0
+	; Bs0Dd [bs0dd.net], 2025
+
+	.ENABL AMA 	; Absolute addressing
+	.ASECT		; Absolute section
+	.= 0		; Beginning of cartridge
+	NOP 		; Obligatory!
+	
+	LCDINA = 164000
+	LCDINB = 164002
+	SMPCMD = 164026
+	SMPBAUD = 164022
+	SMPCS = 164024
+	SMPIO = 164020
+	
+	PRINTATTRS = 34072
+	PRINT = 153414
+	INITRAM = 153700
+	INITTTY = 120536
+	WAITCOMM = 174506
+	GETCH = 131120
+	PUTCH = 116542
+	KBVECT = 130514
+	SCRPTR = 34022
+	DISIND = 34074
+	DISCURS = 34076
+	CURSX = 34044
+	CURSY = 33726
+	
+	mov #27476, sp   ; Move stack to nearly end of RAM
+	mov r5, @#REGI
+	
+	mov	#11,@#SMPBAUD ; CONST: transfer rate
+	mov	#SMPCS,r1	 ; CONST: control/status register
+	mov	#WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
+	
+LOADR:
+	mov	#END-776, r4		;number of bytes
+	mov	#776, r3
+	mtps #340		;disable interrupts
+	bis	#10, r5		;writing to the SMP
+	mov	r5,(r1)
+	mov	#240, @#SMPCMD	;Write Address
+	jsr	pc,(r2)
+	movb #1, @#SMPIO	;high address byte 
+	jsr	pc,(r2)
+	movb #376, @#SMPIO	;low address byte
+	jsr	pc, (r2)
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	; load data
+	mov	#320, @#SMPCMD	;Read Postincrement
+	jsr	pc, (r2)
+	bic	#10, r5		;reading from the SMP
+	mov	r5, (r1)
+	jsr	pc, (r2)
+nxtb:	
+	movb @#SMPIO, (r3)+	;read data byte from the SMP to the RAM
+	jsr	pc, (r2)
+	sob	r4, nxtb		;next data byte
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	mtps #0
+	br smpset
+
+REGI:
+	.word 0
+
+OCTBUF:
+	.byte 0,0,0,0,0
+OBEND:
+	.byte 0,0
+	.even
+	
+DIBUF1:
+	.word 0
+DIBUF2:
+	.word 0
+DIBUF3:
+	.word 0
+DIBUF4:
+	.word 0
+DIBUF5:
+	.word 0
+DIBUF6:
+	.word 0
+DIBUF7:
+	.word 0
+DIBUF8:
+	.word 0
+DIBUF9:
+	.word 0
+DIBUFA:
+	.word 0
+DIBUFB:
+	.word 0
+DIBUFC:
+	.word 0
+DIBUFD:
+	.word 0
+
+INPUBF:
+	.blkb 10
+	
+	; ----------------------------
+	;    M  a  i  n
+	; ----------------------------
+smpset:	
+	bic #376, @#REGI
+	beq smz
+	clr @#REGI
+	br saddi
+smz:
+	inc @#REGI
+	incb @#smnum
+saddi:
+	add #370, @#REGI
+	
+start:
+	call @#INITRAM	; OS initialisation
+	call @#INITTTY
+	inc @#DISCURS ; disable cursor
+	inc @#DISIND ; disable indication
+	br stcon
+
+; --------------------
+.= 310
+KEYB:
+	.word KBVECT, 0
+; --------------------
+
+stcon:
+
+	; LCD controller initialisation
+	mov	@#SCRPTR,@#LCDINA
+	mov	#104306,@#LCDINB
+	
+	; Print the Title
+	bis #41, @#PRINTATTRS	; black background
+	
+	clr @#CURSX ; X=0
+	clr @#CURSY ; Y=0
+
+	mov #cartTitle, r1
+	call @#PRINT
+
+	bic #41, @#PRINTATTRS
+	
+	mov #select, r1
+	call @#PRINT
+	
+waitkey:
+	jsr	pc,@#GETCH	;wait for a key
+
+	cmpb r2, #61
+	blt waitkey
+	beq smpt
+	cmpb r2, #62
+	beq keyt
+	cmpb r2, #63
+	bgt waitkey
+	jmp @#173000 ; Reboot!
+	
+smpt:
+	jmp @#smptest
+	
+;-----------------------------
+	
+keyt:
+	jsr	pc,@#166704
+	inc @#DISCURS
+	clr @#CURSX ; X=0
+	clr @#CURSY ; Y=0
+	bis #41, @#PRINTATTRS	; black background
+	mov #tktit, r1
+	call @#PRINT
+	bic #1, @#PRINTATTRS
+	mov #tktex, r1
+	call @#PRINT
+waivk:
+	jsr	pc,@#GETCH	;wait for a key
+	bis #40, @#PRINTATTRS
+	cmp	#15,r2
+	bne waivk
+	jsr	pc,@#166704
+	mov	#10,@#CURSY
+	clr @#CURSX
+	inc @#DISCURS ; disable cursor
+	clr DIBUF2
+	mov #tkmko, r1
+	call @#PRINT
+	clr	DIBUF1
+	clr	r3
+b4:
+	cmp	r3,#10
+	bgt	b1
+	mov	#70,r4
+	br	b2
+b1:
+	mov	#60,r4
+b2:
+	jsr	pc,f1
+	br	b3
+	
+f1:
+	mov	#2,33734
+	mov	#10,r5
+	cmp	#70,r3
+	bne	f1b1
+	cmp	#110,r4
+	bne	f1b2
+	mov	#spck1,r0
+	br	f1b3
+f1b2:
+	cmp	#120,r4
+	bne	f1b1
+	mov	#spck2,r0
+	br	f1b3
+f1b1:
+	mov	#norke,r0
+f1b3:
+	mov	r3,r2
+f1b4:
+	mov	r2,@#33726
+	mov	r4,@#34044
+	movb	(r0)+,r1
+	swab	r1
+	jsr	pc,@#117722 ; plot a dot
+	inc	r2
+	dec	r5
+	bne	f1b4
+	rts	pc
+	
+b3:
+	add	#10,r4
+	cmp	#160,r4
+	bne	b2
+	add	#10,r3
+	cmp	#100,r3
+	bne	b4
+	bic	#40,@#PRINTATTRS
+	clr	34144
+	clr	DIBUF3
+b5:
+	tstb	34144
+	beq	b5
+	bis	#40,@#PRINTATTRS
+	cmpb	#373,34144
+	bne	b6
+	cmpb	#373,DIBUF2
+	bne	b6
+	jmp	@#start		;self-test menu
+b6:
+	tst	DIBUF3
+	beq	b7
+	jsr	pc,f2
+	jsr	pc,f1
+	cmp	#70,r3
+	bne	b7
+	cmp	#110,r4
+	bne	b8
+	add	#10,r4
+	br	b9
+b8:
+	cmp	#120,r4
+	bne	b7
+	sub	#10,r4
+b9:
+	jsr	pc,f1
+b7:
+	mov	34144,r0
+	bic	#177743,r0
+	asl	r0
+	mov	r0,r3
+	mov	34144,r0
+	bic	#177437,r0
+	asr	r0
+	asr	r0
+	add	#60,r0
+	mov	r0,r4
+	clr	r5
+	mov	r4,-(sp)
+b12:
+	jsr	pc,f2
+	cmp	#1,r5
+	beq	b10
+	cmp	r3,#70
+	bne	b10
+	cmp	#110,r4
+	bne	b11
+	add	#10,r4
+	inc	r5
+	br	b12
+b11:
+	cmp	#120,r4
+	bne	b10
+	sub	#10,r4
+	inc	r5
+	br	b12
+b10:
+	mov	(sp)+,r4
+	mov	r3,r2
+	dec	r2
+	mov	#2,33734
+	mov	#uvalu,r0
+	mov	#11,r5
+sb1:
+	movb	(r0)+,r1
+	swab	r1
+	mov	r2,33726
+	mov	r4,34044
+	jsr	pc,@#117722
+	inc	r2
+	sob	r5,sb1
+	bis	#1,PRINTATTRS
+	mov	r3,33726
+	mov	r4,34044
+	inc	34044
+	cmp	r3,#60
+	blo	b13
+	mov	33716,DIBUF3
+	mov	#specsy,33716
+	mov	34144,r2
+	bic	#177400,r2
+	ash	#177773,r2
+	cmp	#60,r3
+	beq	b14
+	add	#10,r2
+b14:
+	add	#100,r2
+	mov	#1,33734
+	movb	34144,DIBUF2
+	cmpb	#33,34144
+	beq	b15
+	cmpb	#337,34144
+	bne	b16
+b15:
+	clr	34144
+	clr	34162
+	clr	34164
+	br	b17
+b16:
+	cmpb	#377,34144
+	bne	b18
+	inc	DIBUF1
+b18:
+	bit	#1,DIBUF1
+	bne	b19
+	cmpb	#173,34144
+	beq	b20
+	cmpb	#233,34144
+	beq	b20
+	br	b17
+b19:
+	cmpb	#137,34144
+	beq	b21
+	cmpb	#277,34144
+	beq	b22
+	br	b17
+b20:
+	add	#15,r2
+	br	b17
+b21:
+	add	#10,r2
+	br	b17
+b22:
+	add	#6,r2
+b17:
+	jsr	pc,@#116664
+	mov	DIBUF3,33716
+	bic	#40,@#PRINTATTRS
+	jsr	pc,@#131130
+	bis	#40,@#PRINTATTRS
+	cmpb	#16,r2
+	bne	b23
+	mov	#154606,33716
+	br	b24
+b23:
+	cmpb	#17,r2
+	bne	b24
+	mov	#154154,33716
+	br	b24
+b13:
+	mov	34144,DIBUF2
+	bic	#40,@#PRINTATTRS
+	jsr	pc,@#131130
+	bis	#40,@#PRINTATTRS
+	mov	#1,33734
+	clr	@#34074
+	jsr	pc,@#116542
+	inc	@#34074
+b24:
+	bic	#1,PRINTATTRS
+	mov	r2,r0
+	mov	#60,33726
+	jsr	pc,f3
+	mov	DIBUF2,r0
+	mov	#30,33726
+	jsr	pc,f3
+	inc	DIBUF3
+	clr	34144
+	jmp	b5
+f3:
+	mov	#14,r5
+	bic	#177400,r0
+	mov	r0,r2
+	mov	#OBEND,r0
+	mov	r4,-(sp)
+	mov	#3,r4
+	mov	r2,r1
+	jsr	pc,100040
+	mov	(sp)+,r4
+	mov	#1,33734
+b26:
+	mov	r5,34044
+	movb	(r0)+,r2
+	beq	b25
+	jsr	pc,@#116542
+	add	#6,r5
+	br	b26
+b25:
+	rts	pc
+f2:
+	mov	r3,@#33726
+	mov	r4,@#34044
+	dec	@#33726
+	mov	#177400,34102
+	mov	#11,r2
+sb2:
+	mov	#1,33734
+	clr	r1
+	jsr	pc,@#117722
+	inc	33726
+	sob	r2,sb2
+	rts	pc
+
+tktit:
+	.asciz <16>\   tEST KLAWIATURY  \
+tktex:
+	.ascii <15><12>\  dLQ ZAPUSKA TESTA NAVMITE KLAWI[U "wk"I \
+	.ascii \NAVIMAJTE KLAWI[I,KOTORYE PROWERQETE. dLQ WYHODA \
+	.asciz \IZ TESTA NAVMITE 2 RAZA\<15><12>\KLAWI[U "wk".\
+
+tkmko:
+	.asciz <16>\MA[INNYJ\<15><12>\  KOD\<17><15><12><12><12>\ ASCII\
+	
+uvalu:
+	.byte 376, 200, 200, 200, 200, 200, 200, 200, 200, 377
+norke:
+	.byte 0, 376, 202, 202, 202, 376, 0, 0
+spck1:
+	.byte 0, 377, 200, 200, 200, 377, 0, 0
+spck2:
+	.byte 0, 376, 2, 2, 2, 376, 0, 0
+	
+specsy: ; additional charset - F3C8 in 2.0
+	.RADIX 2
+	.byte 11100100, 00101011, 11010011, 10000100, 11100100, 01110101, 01001000, 01000000
+	.byte 00000000, 00000100, 01000111, 11010000, 01000000, 00001000, 10001000, 10000010
+	.byte 00001000, 00100100, 00010000, 01000001, 00010001, 00010000, 00000010, 00001011
+	.byte 11100010, 00100000, 00111000, 01000111, 11010011, 11000101, 00110110, 00101001
+	.byte 10001010, 11111000, 10100101, 11000101, 00110001, 00111010, 10010100, 10100000
+	.byte 00000001, 00001001, 01010111, 00010011, 11100100, 00100001, 00101010, 11100010
+	.byte 00000000, 00000000, 00000000, 00000000, 00000000, 00000000, 00000000, 00000000
+	.byte 00000000, 01000111, 01010100, 10000100, 00100111, 11011101, 01010111, 00010100
+	.byte 11000101, 00101110, 00101001, 10001010, 11111100, 10100101, 00000000, 00000000
+	.byte 11000110, 00010001, 00000000, 00000000, 00000000, 00000110, 00110000, 00000000
+	.byte 01001111, 11010010, 00000000, 00000000, 00010010, 11111100, 10000000, 00000000
+	.even
+	.RADIX 8
+	
+;-----------------------------
+	
+smptest:
+	jsr	pc,@#166704
+	clr @#CURSY
+	mov	#swelc,r1
+	bis	#41,@#PRINTATTRS
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	bic	#41,@#PRINTATTRS
+q2:
+	mov	#smwlc,r1
+	jsr	pc,@#PRINT	;display the string pointed to by r1
+q3:
+	mov	#stadr,r1
+	jsr	pc,@#PRINT	;display the string pointed to by r1
+	mov	#INPUBF,r4
+	jsr	pc,t1
+	tst	@#DIBUF1
+	beq	q3
+	cmp	#6,@#DIBUF1
+	blt	q3
+	mov	#INPUBF,r3
+	mov	#DIBUF2,r4
+	jsr	pc,t2
+	cmp	@#DIBUF2,#23777
+	bgt	q3
+q4:
+	mov	#enadr,r1
+	jsr	pc,@#PRINT	;display the string pointed to by r1
+	mov	#INPUBF,r4
+	jsr	pc,t1
+	tst	@#DIBUF1
+	beq	q4
+	cmp	#6,@#DIBUF1
+	blt	q4
+	mov	#INPUBF,r3
+	mov	#DIBUF3,r4
+	jsr	pc,t2
+	cmp	@#DIBUF3,#23777
+	bgt	q5
+	mov	@#DIBUF3,r4
+	sub	@#DIBUF2,r4
+	cmp	r4,#0
+	bge	q6
+	br	q3
+q5:
+	mov	#outof,r1
+	jsr	pc,@#PRINT	;display the string pointed to by r1
+	br	q4
+t1:
+	clr	@#DIBUF1
+q8:
+	jsr	pc,@#GETCH	;wait for a key
+	cmp	r2,#15
+	beq	q7
+	cmp @#DIBUF1, #7
+	beq q8
+	cmp	r2,#60
+	blt	q8
+	cmp	r2,#67
+	bgt	q8
+	inc	@#DIBUF1
+q7:
+	jsr	pc,@#PUTCH
+	movb	r2,(r4)+
+	cmp	r2,#15
+	bne	q8
+	rts	pc
+t2:
+	clr	r1
+q10:
+	movb	(r3)+,r2
+	bic	#177770,r2
+	add	r2,r1
+	cmpb	(r3),#15
+	beq	q9
+	asl	r1
+	asl	r1
+	asl	r1
+	br	q10
+q9:
+	mov	r1,(r4)
+	rts	pc
+q6:
+	jsr	pc,w1
+	br	q11
+w1:
+	mov	#loopz,r1
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	#INPUBF,r4
+	jsr	pc,t1
+	tst	@#DIBUF1
+	beq	w1
+	cmp	#3,@#DIBUF1
+	blt	w1
+	mov	#INPUBF,r3
+	mov	#DIBUF4,r4
+	jsr	pc,t2
+	rts	pc
+q11:
+	mov	@#DIBUF2, @#DIBUF5
+z8:
+	clr	@#DIBUF6
+	jsr	pc,@#CLESC
+	mov	#1,33734
+	clr	@#CURSX
+	clr	@#CURSX
+	mov	#smlbl,r1
+	bis	#41,@#PRINTATTRS
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	bic	#41,@#PRINTATTRS
+	mov	#1,@#DIBUF7
+	mov	#11,@#SMPBAUD
+	mov	@#REGI,@#SMPCS
+	mov	#252,r1
+	clr	r2
+z7:
+	mov	@#DIBUF2,r0
+z6:
+	mov	@#DIBUF2,r3
+	jsr	pc,@#116622
+	mov	@#DIBUF7,@#INPUBF
+	add	#60,@#INPUBF
+	mov	#INPUBF,r1
+	clr	@#CURSY
+	mov	#74,@#CURSX
+	bis	#41,@#PRINTATTRS
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	bic	#41,@#PRINTATTRS
+	mov	@#DIBUF2,-(sp)
+	mov	#61,@#INPUBF
+q13:
+	sub	#4000,@#DIBUF2
+	blt	q12
+	inc	@#INPUBF
+	br	q13
+q12:
+	mov	(sp)+,@#DIBUF2
+	mov	#INPUBF,r1
+	mov	#162,@#CURSX
+	clr	@#CURSY
+	bis	#41,@#PRINTATTRS
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	bic	#41,@#PRINTATTRS
+	jsr	pc,@#116646
+	clr	@#CURSX
+	mov	#10,@#CURSY
+	jsr	pc,t3
+	mov	#14,@#DIBUF8
+	mov	#132,@#DIBUF9
+	mov	@#DIBUF2,@#DIBUF1
+	bic	#174000,@#DIBUF1
+q16:
+	cmp	@#DIBUF1,#100
+	blt	q14
+	sub	#100,@#DIBUF1
+	cmp	#154,@#DIBUF9
+	bne	q15
+	add	#6,@#DIBUF8
+	mov	#132,@#DIBUF9
+	br	q16
+q15:
+	add	#6,@#DIBUF9
+	br	q16
+q14:
+	mov	@#DIBUF1,@#DIBUFA
+z5:
+	jsr	pc,t4
+	mov	#300,@#SMPCMD
+	jsr	pc,@#waiter
+	cmp	#1,@#DIBUF7
+	beq	q17
+	cmp	#2,@#DIBUF7
+	beq	q17
+q19:
+	cmp	r0,r3
+	beq	q17
+	movb	r2,@#SMPIO
+	jsr	pc,@#waiter
+q20:
+	cmp	@#DIBUF3,r3
+	beq	q18
+	inc	r3
+	br	q19
+q17:
+	movb	r1,@#SMPIO
+	jsr	pc,@#waiter
+	cmp	#1,@#DIBUF7
+	beq	q18
+	cmp	#2,@#DIBUF7
+	beq	q18
+	br	q20
+q18:
+	tst	@#SMPCMD
+	jsr	pc,@#waiter
+	cmp	#1,@#DIBUF7
+	beq	q21
+	cmp	#2,@#DIBUF7
+	beq	q21
+	mov	@#DIBUF2,r3
+q21:
+	jsr	pc,t4
+	mov	#320,@#SMPCMD
+	jsr	pc,@#waiter
+	bicb	#10,@#REGI
+	mov	@#REGI,@#SMPCS
+	jsr	pc,@#waiter
+z4:
+	mov	@#SMPIO,r4
+	bic	#177400,r4
+	jsr	pc,@#waiter
+	cmp	r0,r3
+	beq	q22
+	cmpb	r4,r2
+	bne	q23
+	br	q24
+q22:
+	cmpb	r4,r1
+	bne	q23
+	br	q24
+q23:
+	jsr	pc,t5
+	br	q25
+q24:
+	jsr	pc,t6
+	jmp	z1
+q25:
+	tst	@#SMPCMD
+	jsr	pc,@#waiter
+	mov	#3,@#DIBUFB
+	mov	r2,-(sp)
+	mov	r1,r5
+	mov #errom,r1
+	clr	@#CURSX
+	mov	#10,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	r5,r1
+	br	q26
+t5:
+	mov	#1,@#DIBUF6
+t6:
+	inc	@#DIBUFA
+	jsr	pc,@#116622
+	cmp	@#DIBUFA,#100
+	bne	q27
+	cmp	#1,@#DIBUF6
+	beq	q28
+	mov	#6,r5
+	mov	#grph2,r0
+	mov	@#DIBUF8,r2
+sbu1:
+	mov	r2,@#CURSY
+	mov	@#DIBUF9,@#CURSX
+	movb	(r0)+,r1
+	swab	r1
+	jsr	pc,@#117722 ; plot a dot
+	inc	r2
+	sob	r5,sbu1
+q28:
+	cmp	#154,@#DIBUF9
+	bne	q29
+	add	#6,@#DIBUF8
+	mov	#132,@#DIBUF9
+	br	q30
+q29:
+	add	#6,@#DIBUF9
+q30:
+	clr	@#DIBUFA
+	clr	@#DIBUF6
+q27:
+	jsr	pc,@#116646
+	rts	pc
+q26:
+	mov	r1,r5
+	mov	#ernei,r1
+	clr	@#CURSX
+	mov	#20,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	#erbyt,r1
+	clr	@#CURSX
+	mov	#30,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	r5,r1
+	mov	r3,@#DIBUF1
+	mov	#5,@#DIBUFD
+	mov	#44,@#CURSX
+	mov	#30,@#CURSY
+	mov	#6,@#DIBUFD
+z2:
+	mov	r0,-(sp)
+	mov	#OBEND,r0
+	mov	r4,-(sp)
+	mov	r1,r5
+	mov	@#DIBUFD,r4
+	mov	@#DIBUF1,r1
+	jsr	pc,@#100040
+	mov	(sp)+,r4
+	mov	r0,r1
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	r5,r1
+	mov	(sp)+,r0
+	dec	@#DIBUFB
+	cmp	#2,@#DIBUFB
+	bne	q31
+	mov	r1,r5
+	mov	#erzap,r1
+	clr	@#CURSX
+	mov	#40,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	#erinf,r1
+	clr	@#CURSX
+	mov	#50,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	r5,r1
+	cmp	r0,r3
+	beq	q32
+	mov	(sp),r2
+	mov	r2,@#DIBUF1
+	br	q33
+q32:
+	mov	r1,@#DIBUF1
+q33:
+	mov	#3,@#DIBUFD
+	mov	#102,@#CURSX
+	mov	#50,@#CURSY
+	jmp	z2
+q31:
+	tst	@#DIBUFB
+	beq	q34
+	mov	r1,r5
+	mov	#ersch,r1
+	clr	@#CURSX
+	mov	#60,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	#erinf,r1
+	clr	@#CURSX
+	mov	#70,@#CURSY
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	mov	r5,r1
+	mov	r4,@#DIBUF1
+	mov	#3,@#DIBUFD
+	mov	#102,@#CURSX
+	mov	#70,@#CURSY
+	jmp	z2
+q34:
+	mov	(sp)+,r2
+	jmp	z3
+z1:
+	cmp	@#DIBUF3,r3
+	beq	q35
+	cmp	#1,@#DIBUF7
+	beq	q36
+	cmp	#2,@#DIBUF7
+	beq	q36
+	inc	r3
+	mov	r0,-(sp)
+	mov	r3,r0
+	jsr	pc,t7
+	mov	(sp)+,r0
+	jmp	z4
+q36:
+	tst	@#SMPCMD
+	jsr	pc,@#waiter
+	inc	r0
+	inc	r3
+	jsr	pc,t7
+	jmp	z5
+t7:
+	mov	r2,-(sp)
+	cmp	r0,#4000
+	beq	q37
+	cmp	r0,#10000
+	beq	q38
+	cmp	r0,#14000
+	beq	q39
+	cmp	r0,#20000
+	beq	q40
+	br	q41
+q37:
+	mov	#62,@#INPUBF
+	br	q42
+q38:
+	mov	#63,@#INPUBF
+	br	q42
+q39:
+	mov	#64,@#INPUBF
+	br	q42
+q40:
+	mov	#65,@#INPUBF
+q42:
+	mov	r1,r5
+	mov	#INPUBF,r1
+	mov	#162,@#CURSX
+	clr	@#CURSY
+	bis	#41,@#PRINTATTRS
+	jsr	pc,@#PRINT		;display the string pointed to by r1
+	bic	#41,@#PRINTATTRS
+	mov	r5,r1
+	jsr	pc,t3
+	mov	#14,@#DIBUF8
+	mov	#132,@#DIBUF9
+	clr	@#DIBUFA
+q41:
+	mov	(sp)+,r2
+	clr	@#CURSX
+	mov	#10,@#CURSY
+	rts	pc
+q35:
+	tst	@#SMPCMD
+	jsr	pc,@#waiter
+z9:
+	cmp	#3,@#DIBUF7
+	beq	q43
+	cmp	#4,@#DIBUF7
+	beq	q44
+	br	q45
+q43:
+	dec	@#DIBUFC
+	beq	q45
+	clc
+	rorb	r1
+	jmp	z6
+q44:
+	dec	@#DIBUFC
+	beq	q45
+	rorb	r1
+	jmp	z6
+q45:
+	inc	@#DIBUF7
+	cmp	#2,@#DIBUF7
+	bne	q46
+	mov	#125,r1
+	mov	@#DIBUF5,@#DIBUF2
+	jmp	z7
+q46:
+	cmp	#3,@#DIBUF7
+	bne	q47
+	mov	@#DIBUF5,@#DIBUF2
+	mov	#200,r1
+	mov	#10,@#DIBUFC
+	jmp	z7
+q47:
+	cmp	#4,@#DIBUF7
+	beq	q48
+	dec	@#DIBUF4
+	beq	q49
+	mov	@#DIBUF5,@#DIBUF2
+	jmp	z8
+q48:
+	mov	#177,r1
+	mov	#10,@#DIBUFC
+	mov	@#DIBUF5,@#DIBUF2
+	jmp	z7
+
+waiter:
+	tstb	@#SMPCS
+	bpl	waiter
+	rts	pc
+
+t4:
+	bisb	#10,@#REGI
+	mov	@#REGI,@#SMPCS
+	mov	#240,@#SMPCMD
+	jsr	pc,@#waiter
+	swab	r3
+	movb	r3,@#SMPIO
+	jsr	pc,@#waiter
+	swab	r3
+	movb	r3,@#SMPIO
+	jsr	pc,@#waiter
+	tst	@#SMPCMD
+	jsr	pc,@#waiter
+	rts	pc
+	
+z3:
+	jsr	pc,t8
+	br	q50
+t8:
+	clr	-(sp)
+q51:
+	inc	(sp)
+	cmp	#30000,(sp)
+	bge	q51
+	tst	(sp)+
+	rts	pc
+q50:
+	cmp	r3,@#DIBUF3
+	beq	q52
+	inc	r3
+	cmp	#2,@#DIBUF7
+	blo	q53
+	jmp	z5
+q52:
+	jmp	z9
+q53:
+	jmp	q21
+q49:
+	jmp	@#start		;self-test menu
+
+t3:
+	jsr	pc,@#116622
+	mov	#14,r3
+q55:
+	mov	#132,r4
+q54:
+	mov	#12,r5
+	mov	#grph1,r0
+	mov	r3,r2
+sbu2:
+	mov	r2,@#CURSY
+	mov	r4,@#CURSX
+	movb	(r0)+,r1
+	swab	r1
+	jsr	pc,@#117722 ; plot a dot
+	inc	r2
+	sob	r5,sbu2
+	add	#6,r4
+	cmp	#162,r4
+	bne	q54
+	add	#6,r3
+	cmp	#74,r3
+	bne	q55
+	jsr	pc,@#116646
+	rts	pc
+
+	
+CLESC:
+	mov	34022,r3
+	mov	#740,r2
+clu:
+	clr	(r3)+
+	sob	r2,clu
+	bis	#40,34072
+	clr	34044
+	clr	33726
+	inc	34074
+	inc	34076
+	rts pc
+
+swelc:
+	.asciz <16>\      tEST smp      \
+smwlc:
+	.ascii <15><12>\tESTIRUETSQ smp\
+smnum:
+	.asciz \0\<15><12>
+stadr:
+	.asciz <15><12>\zADAJTE NA^ALXNYJ\<15><12>\ADRES: \
+enadr:
+	.asciz <15><12>\zADAJTE KONE^NYJ\<15><12>\ADRES: \
+outof:
+	.asciz <15><12>\wYHOD ZA GRANICY smp\
+loopz:
+	.asciz <15><12>\wWEDITE KOLI^ESTWO  PROHODOW: \
+errom:
+	.asciz \o[IBKA,ADRES\
+ernei:
+	.asciz \NEISPRAWNOGO\
+erbyt:
+	.asciz \BAJTA:\
+erzap:
+	.asciz \zAPISANNAQ\
+erinf:
+	.asciz \INFORMACIQ:\
+ersch:
+	.asciz \s^ITANNAQ\
+smlbl:
+	.asciz \TEST SMP #  MIK-MA \
+
+grph1:
+	.byte 376, 202, 202, 202, 202, 376, 0, 0, 0, 0
+grph2:
+	.byte 376, 376, 376, 376, 376, 376
+
+;-----------------------------
+
+cartTitle:
+	.asciz <16>\     tESTY  2.0     \
+select:
+	.asciz <12>\1 smp\<12><12><15>\2 kLAWIATURA\<12><12><15>\3 wOZWRAT\
+END:
