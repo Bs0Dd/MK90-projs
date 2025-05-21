@@ -1,0 +1,18 @@
+
+	;------------------------------------
+	; OS Procedures and Vars (BASIC 2.0)
+	;------------------------------------
+
+	PRINTATTRS = 6534
+	PRINT = 160372
+	INITRAM = 145154
+	INITTTY = 122324
+	WAITCOMM = 174546
+	KBVECT = 136550
+	DISIND = 6536
+	DISCURS = 6540
+	CURSX = 6506
+	CURSY = 6120
+	SCANC = 6606
+	SMPBOOT = 174212
+	SCRPTR = 6402

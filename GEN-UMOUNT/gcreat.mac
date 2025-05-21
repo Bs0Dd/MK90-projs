@@ -1,0 +1,155 @@
+	; MK90 STMP/PIMP unmounter (BOOTL zone) creator.
+	; Bs0Dd [bs0dd.net], 2025
+
+	.ENABL AMA 	; Absolute addressing
+	.ASECT		; Absolute section
+	.= 0		; Beginning of cartridge
+	NOP 		; Obligatory!
+	
+	LCDINA = 164000
+	LCDINB = 164002
+	SMPCMD = 164026
+	SMPBAUD = 164022
+	SMPCS = 164024
+	SMPIO = 164020
+	
+	; ----------------------------
+	;    M  a  i  n
+	; ----------------------------
+	mov r5, -(sp)
+	
+	movb @#115252, r1
+	cmpb r1, #62 ; BASIC 2.0? (sec. vectors set)
+	bne start
+	mov #SPRINT, r1
+	mov #PRINT, r5
+	mov #10, r2
+b2a:
+	mov (r1)+, (r5)+
+	sob r2, b2a
+	add #1000, @#LDADR
+	br start
+	
+;adresses for BASIC 1.0 (used by default)
+PRINT:
+	.word 153414
+INITRAM:
+	.word 153700
+INITTTY:
+	.word 120536
+WAITCOMM:
+	.word 174506
+SCRPTR:
+	.word 34022
+CURSX:
+	.word 34044
+CURSY:
+	.word 33726
+DISCURS:
+	.word 34076
+	
+;adresses for BASIC 2.0
+SPRINT:
+	.word 160372
+SINITRAM:
+	.word 145154
+SINITTTY:
+	.word 122324
+SWAITCOMM:
+	.word 174546
+SSCRPTR:
+	.word 6402
+SCURSX:
+	.word 6506
+SCURSY:
+	.word 6120
+SDISCURS:
+	.word 6540
+	
+start:
+	call @INITRAM	; OS initialisation
+	call @INITTTY
+	
+	inc @DISCURS ; disable cursor
+
+	; LCD controller initialisation
+	mov	@SCRPTR,@#LCDINA
+	mov	#104306,@#LCDINB
+	
+	clr @CURSX ; X=0
+	clr @CURSY ; Y=0
+	
+	mov (sp)+, r5
+	mov	#1000, r4		; number of bytes
+	mov	#10000, r3		; buffer
+	mov	#11,@#SMPBAUD ; CONST: transfer rate
+	mov	#SMPCS,r1	 ; CONST: control/status register
+	mov	WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
+	
+	mtps #340		;disable interrupts
+	bis	#10, r5		;writing to the SMP
+	mov	r5,(r1)
+	mov	#240, @#SMPCMD	;Write Address
+	jsr	pc,(r2)
+	movb LDADR+1, @#SMPIO	;high address byte 
+	jsr	pc,(r2)
+	movb LDADR, @#SMPIO	;low address byte
+	jsr	pc, (r2)
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	; load data
+	mov	#320, @#SMPCMD	;Read Postincrement
+	jsr	pc, (r2)
+	bic	#10, r5		;reading from the SMP
+	mov	r5, (r1)
+	jsr	pc, (r2)
+nxtb:	
+	movb @#SMPIO, (r3)+	;read data byte from the SMP to the RAM
+	jsr	pc, (r2)
+	sob	r4, nxtb		;next data byte
+smpdone: ; Addition from issue to fix keyboard, thanks Piotr
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	
+	mov	#10000, r3		; buffer
+	
+	mov #1, r4
+	xor r4, r5	; switch to another SMP
+	
+	bis	#10,r5		; writing to the SMP
+	mov	r5,(r1)
+	mov	#240, @#SMPCMD	;Write Address
+	jsr	pc,(r2)
+	clr @#SMPIO	;high address byte
+	jsr	pc,(r2)
+	clr @#SMPIO	;low address byte
+	jsr	pc, (r2)
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	; write data
+	mov	#300, @#SMPCMD	;Write Postincrement
+	jsr	pc,(r2)
+sendoop:
+	movb (r3), @#SMPIO
+	jsr	pc,(r2)
+	inc r3
+	cmp r3, #11000
+	bne sendoop
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	
+
+	mov #select, r1
+	call @PRINT
+	mov #177777, r0
+waiting:
+	sob r0, waiting
+exit:
+	jmp @#173000 ; Reboot!
+
+select:
+	.asciz <16><12>\zAPISANO!\
+LDADR:
+	.word UMTBIN
+	
+UMTBIN:
