@@ -1,4 +1,5 @@
 	; MK90 STMP/PIMP unmounter (BOOTL zone) creator.
+	; Silent version
 	; Bs0Dd [bs0dd.net], 2025
 
 	.ENABL AMA 	; Absolute addressing
@@ -25,7 +26,6 @@
 b2a:
 	mov (r1)+, (r5)+
 	sob r2, b2a
-	add #1000, @#LDADR
 	br start
 	
 ;adresses for BASIC 1.0 (used by default)

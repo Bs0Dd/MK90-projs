@@ -16,7 +16,7 @@
 	; ----------------------------
 	;    M  a  i  n
 	; ----------------------------
-smpset:	
+smpset:
 	bic #376, r5
 	beq smz
 	clr r5
@@ -27,15 +27,12 @@ smz:
 saddi:
 	add #370, r5
 	mov r5, @#REGI
-	
+
 start:
 	call @#INITRAM	; OS initialisation
 	call @#INITTTY
 	inc @#DISCURS ; disable cursor
 	inc @#DISIND ; disable indication
-	br stcon
-
-stcon:
 
 	; LCD controller initialisation
 	mov	@#SCRPTR,@#LCDINA
@@ -74,11 +71,11 @@ umount:
 	mov	#11,@#SMPBAUD ; CONST: transfer rate
 	mov	#SMPCS,r1	 ; CONST: control/status register
 	mov	#WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
-	bis	#10,@#REGI		; writing to the SMP
+	bis	#10,@#REGI	; writing to the SMP
 	mov	@#REGI,(r1)
 	mov	#361,@#SMPCMD	;cmd: 0xF1 Select File Name
 	jsr	pc,(r2)
-	; Write everything at r3 until 0x00 (inclusing 0x00)
+; Write everything at r3 until 0x00 (inclusing 0x00)
 selloop:
 	movb (r3), @#SMPIO
 	jsr	pc,(r2)
@@ -91,18 +88,16 @@ smpdone:
 	jsr	pc, (r2)
 	mov	@#REGI, r5
 	mov #177777, r0
-	br waiting
-	
+waiting:
+	sob r0, waiting
+exit:
+	jmp @#SMPBOOT
+
 ; --------------------
 .= 310
 KEYB:
 	.word KBVECT, 0
 ; --------------------
-
-waiting:
-	sob r0, waiting
-exit:
-	jmp @#SMPBOOT
 
 cartTitle:
 	.asciz \   Gen-UMOUNT 1.0   \
@@ -116,6 +111,6 @@ AUTORUN:
 REGI:
 	.word 0
 	
-; Fill free space (for glueing with EMPTYx0.BIN)
+; Fill free space (for glueing)
 .=776
 	.word 0

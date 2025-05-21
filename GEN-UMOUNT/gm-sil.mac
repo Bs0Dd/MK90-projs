@@ -1,0 +1,60 @@
+	; MK90 STMP/PIMP unmounter (BOOTL zone) for Basic [1.0/2.0]
+	; Silent version
+	; Bs0Dd [bs0dd.net], 2025
+
+	.ENABL AMA 	; Absolute addressing
+	.ASECT		; Absolute section
+	.= 0		; Beginning of cartridge
+	NOP 		; Obligatory!
+	
+	SMPCMD = 164026
+	SMPBAUD = 164022
+	SMPCS = 164024
+	SMPIO = 164020
+	
+	; ----------------------------
+	;    M  a  i  n
+	; ----------------------------
+start:
+	mov #1, r4
+	xor r4, r5	; switch to another SMP
+	
+	;call @#INITRAM	; OS initialisation
+	;call @#INITTTY
+	
+	mov #AUTORUN, r3
+; Set the emulated file name - zero terminated in r3
+	mov	#11,@#SMPBAUD ; CONST: transfer rate
+	mov	#SMPCS,r1	 ; CONST: control/status register
+	mov	#WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
+	bis	#10,r5		; writing to the SMP
+	mov	r5,(r1)
+	mov	#361,@#SMPCMD	;cmd: 0xF1 Select File Name
+	jsr	pc,(r2)
+; Write everything at r3 until 0x00 (inclusing 0x00)
+selloop:
+	movb (r3), @#SMPIO
+	jsr	pc,(r2)
+	tstb (r3)
+	beq smpdone
+	inc r3
+	br selloop
+smpdone:
+	tst	@#SMPCMD
+	jsr	pc, (r2)
+	mov #177777, r0
+waiting:
+	sob r0, waiting
+	cmpb @#115252, #62 ; BASIC 2.0?
+	bne boot10
+	jmp @#174204 ; boot from STMP/PIMP (B2.0)
+boot10:
+	jmp @#174210 ; boot from STMP/PIMP (B1.0)
+
+WAITCOMM:
+	tstb (r1)
+	bpl WAITCOMM
+	rts pc
+
+AUTORUN:
+	.asciz \AUTORUN.BIN\
