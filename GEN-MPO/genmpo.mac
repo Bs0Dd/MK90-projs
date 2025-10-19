@@ -1,79 +1,94 @@
 	; MPO-10 progger from Genjitsu compatible cartridge
+	; Version 2.0 [universal]
 	; Bs0Dd [bs0dd.net], 2025
 
-	.ENABL AMA 	; Absolute addressing
-	.ASECT		; Absolute section
-	.= 0		; Beginning of cartridge
-	NOP 		; Obligatory!
-	
+	.ENABL AMA ; Absolute addressing
+	.ASECT ; Absolute section
+	.= 0 ; Beginning of cartridge
+	NOP ; Obligatory!
+
 	LCDINA = 164000
 	LCDINB = 164002
 	SMPCMD = 164026
 	SMPBAUD = 164022
 	SMPCS = 164024
 	SMPIO = 164020
-	
+
 	mov r5, -(sp)
-	
-	movb @#115252, r1
-	cmpb r1, #62 ; BASIC 2.0? (sec. vectors set)
+
+	cmpb @#115252, #62 ; BASIC 2.0? (second vectors set)
 	bne bas1
 	mov #SPRATTRS, r1
 	mov #PRINTATTRS, r5
-	mov #17, r2
+	mov #11, r2
 b2a:
 	mov (r1)+, (r5)+
 	sob r2, b2a
-	
+
 bas1:
-	call @INITRAM	; OS initialisation
+	call @INITRAM ; OS initialisation
 	mov #30000, @SCRPTR
-	
+
 	call @#SETCONST
 	mov (sp)+, r5
-	
-	mov #27476, sp   ; Move stack to nearly end of RAM
-	
-	mov	#END-774, r4		;number of bytes
-	mov	#774, r3
-	
-	call @#LOADR
-	
-	mtps #0
-	jmp @#start
 
-LOADR:
-	mtps #340		;disable interrupts
-	bis	#10, r5		;writing to the SMP
-	mov	r5,(r1)
-	mov	#240, @#SMPCMD	;Write Address
-	jsr	pc,(r2)
-	movb LDADR+1, @#SMPIO	;high address byte 
-	jsr	pc,(r2)
-	movb LDADR, @#SMPIO	;low address byte
-	jsr	pc, (r2)
-	tst	@#SMPCMD
-	jsr	pc, (r2)
-	; load data
-	mov	#320, @#SMPCMD	;Read Postincrement
-	jsr	pc, (r2)
-	bic	#10, r5		;reading from the SMP
-	mov	r5, (r1)
-	jsr	pc, (r2)
-nxtb:	
-	movb @#SMPIO, (r3)+	;read data byte from the SMP to the RAM
-	jsr	pc, (r2)
-	sob	r4, nxtb		;next data byte
-smpdone: ; Addition from issue to fix keyboard, thanks Piotr
-	tst	@#SMPCMD
-	jsr	pc, (r2)
+	mov #27476, sp ; Move stack to nearly end of RAM
+
+	mov r5, -(sp) ; Save current SMP slot number
+	
+	mov	#END-774, r4 ; Number of bytes
+	mov	#774, r3 ; Start address
+
+	call @#LOADR ; Load full data
+
+
+	; -------------------------------
+	; 	I n i t i a l i s a t i o n
+	; -------------------------------
+
+	call @INITTTY
+	inc @DISCURS ; Disable cursor
+
+	; LCD controller initialisation
+	mov @SCRPTR, @#LCDINA
+	mov #104306, @#LCDINB
+
+	; Print the Title
+	mov #cartTitle, r1
+
+	jmp @#main ; go to the main part
+
+LOADR: ; SMP data loader
+	mtps #340 ; Disable interrupts
+	bis #10, r5 ; Writing to the SMP
+	mov r5, (r1)
+	mov #240, @#SMPCMD ; Write Address
+	call (r2)
+	movb LDADR+1, @#SMPIO ; High address byte
+	call (r2)
+	movb LDADR, @#SMPIO ; Low address byte
+	call (r2)
+	tst @#SMPCMD
+	call (r2)
+	; Load data
+	mov #320, @#SMPCMD ; Read Postincrement
+	call (r2)
+	bic #10, r5 ; Reading from the SMP
+	mov r5, (r1)
+	call (r2)
+nxtb:
+	movb @#SMPIO, (r3)+ ; Read data byte from the SMP to the RAM
+	call (r2)
+	sob r4, nxtb ; Next data byte
+smpdone: ; Addition to fix keyboard, thanks Piotr
+	tst @#SMPCMD
+	call (r2)
 	rts pc
-	
-LDADR:
-	.word 774 ;(start from o774 to restore data smashed by the stack)
 
-	
-;adresses for BASIC 1.0 (used by default)
+LDADR:
+	.word 774 ; (start from o774 to restore data smashed by the stack)
+
+;addresses for BASIC 1.0 (used by default)
 PRINTATTRS:
 	.word 34072
 PRINT:
@@ -84,28 +99,16 @@ INITTTY:
 	.word 120536
 WAITCOMM:
 	.word 174506
-GETCH:
-	.word 131120
-PUTCH:
-	.word 116542
-DELCH:
-	.word 120670
-KBVECT:
-	.word 130514
 SCRPTR:
 	.word 34022
-DISIND:
-	.word 34074
 DISCURS:
 	.word 34076
 CURSX:
 	.word 34044
 CURSY:
 	.word 33726
-FLGS:
-	.word 34146
-	
-;adresses for BASIC 2.0
+
+;addresses for BASIC 2.0
 SPRATTRS:
 	.word 6534
 SPRINT:
@@ -116,69 +119,58 @@ SINITTTY:
 	.word 122324
 SWAITCOMM:
 	.word 174546
-SGETCH:
-	.word 137472
-SPUTCH:
-	.word 120034
-SDELCH:
-	.word 122462
-SKBVECT:
-	.word 136550
 SSCRPTR:
 	.word 6402
-SDISIND:
-	.word 6536
 SDISCURS:
 	.word 6540
 SCURSX:
 	.word 6506
 SCURSY:
 	.word 6120
-SFLGS:
-	.word 6610
-	
-.= 314
+
+; ------------
+.=310
+	.word KEYINT, 0 ; Keyboard handler vector
+; ------------
+
+
 	; -------------------------------
 	; 	Commands to control the EMU 
 	; -------------------------------
 
-EMULS:
-	; List the files on the EMU SD
+EMULS: ; List the files on the EMU Cart
 	call @#SETCONST
-
 	; Select SMP address
-	bis	#10,r5		; writing to the SMP
-	mov	r5,(r1)
-	mov	#360,@#SMPCMD	;cmd: 0xF0 List Files In Card
-	jsr	pc,(r2)
-	
-	bic	#10,r5		; cmd: reading from the SMP
-	mov	r5,(r1)
-	jsr	pc,(r2)
-
+	bis #10, r5 ; Writing to the SMP
+	mov r5, (r1)
+	mov #360, @#SMPCMD ; Cmd: 0xF0 List Files In Card
+	call (r2)
+	bic #10, r5 ; Cmd: reading from the SMP
+	mov r5, (r1)
+	call (r2)
 	mov #varArray, r3
 lsloop:
 	movb @#SMPIO, (r3)
-	jsr pc, (r2)
-	movb (r3), r4
-	cmpb r4, #377 ; check if last one 0xFF
+	call (r2)
+	movb (r3)+, r4
+	bne nonzero 
+	inc @#TOTALF ; Terminator - one filename received!
+nonzero:
+	cmpb r4, #377 ; Check if last one 0xFF
 	bhis smpdone ; and go out
-	inc r3	; otherwise increment address 
-    br lsloop ; and go on
+	br lsloop ; Otherwhise go on
 
-EMUSEL:
-	; Set the emulated file name - zero terminated in r3
+EMUSEL: ; Set the emulated file name - zero terminated in r3
 	call @#SETCONST
-
-	bis	#10,r5		; writing to the SMP
-	mov	r5,(r1)
-	mov	#361,@#SMPCMD	;cmd: 0xF1 Select File Name
-	jsr	pc,(r2)
-
+	mov 2(sp), r5 ; Restore SMP number from the first stack item
+	bis #10, r5 ; Writing to the SMP
+	mov r5, (r1)
+	mov #361, @#SMPCMD ; Cmd: 0xF1 Select File Name
+	call (r2)
 	; Write everything at r3 until 0x00 (inclusing 0x00)
 selloop:
 	movb (r3), @#SMPIO
-	jsr	pc,(r2)
+	call (r2)
 	tstb (r3)
 	beq smpdone
 	inc r3
@@ -186,242 +178,362 @@ selloop:
 
 
 	; ---------------------------
-	;  P r o c e d u r e s 
+	; 	P r o c e d u r e s 
 	; ---------------------------
-	
-SETCONST: ; set constants
-	mov	#11,@#SMPBAUD ; CONST: transfer rate
-	mov	#SMPCS,r1	 ; CONST: control/status register
-	mov	WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
+
+KEYINT: ; keyboard interrupt service routine
+	call @#SETCONST
+	mov #362, (r1)
+	clr @#SMPCMD ; Start of the transfer
+	call (r2)
+	movb @#SMPCMD, r3 ; Key scan code, end of the transfer
+	call (r2)
+	mov #352, (r1)
+	rti
+
+BTOA: ; Byte to ASCII
+	mov #3, r2
+btc:
+	clr r4
+	div #12, r4
+	add #60, r5
+	movb r5, -(r1)
+	mov r4, r5
+	sob r2, btc
 	rts pc
-	
-TNYDLY: ; tiny delay
-	mov #173000, r0
-waiting:
-	sob r0, waiting
+
+CLSTCL: ; Current list number to ASCII
+	mov #TTBUF-1, r1
+	movb @#LISTN, r5
+	call @#BTOA
+	mov #102, @CURSX
+PAGPRT: ; For "Page" line print
+	mov #70, @CURSY
+	call @PRINT
 	rts pc
-	
-SWSMP: ; switch between SMP
+
+SETCONST: ; Set constants
+	mov #11, @#SMPBAUD ; CONST: transfer rate
+	mov #SMPCS, r1 ; CONST: control/status register
+	mov WAITCOMM, r2 ; CONST: procedure 'wait for the transfer completed'
+	rts pc
+
+SEEKNUM: ; Seek file name by the number
+	mov #varArray, r1
+	mov @#FILNUM, r3
+SEEKALT:
+	beq skend
+skloop:
+	tstb (r1)+
+	bne skloop
+	dec r3
+	bne skloop
+skend:
+	rts pc
+
+FILLST: ; Fill screen with 6 files (one page)
+	mov #varArray, r1
+	movb @#FILPOS, r2
+	mov @#FILNUM, r3
+	sub r2, r3
+	inc r3
+	call @#SEEKALT
+	mov #6, r3
+lstloop:
+	movb (r1), r4
+	cmpb  r4, #377
+	bhis listend
+	call @PRINT
+	clr @CURSX ; CR
+	add #10, @CURSY ; LF
+	sob r3, lstloop
+listend:
+	rts pc
+
+NEWSCR: ; Draw new files page
+	mov @CURSY, -(sp)
+	call @#CLSTCL
+	clr @CURSX
+	mov #10, @CURSY
+	call @#CLRSCR
+	call @#FILLST
+	mov (sp)+, @CURSY
+	rts pc
+
+MOVSEL: ; Move file selection cursor
+	mov r3, -(sp)
+	call @#SEEKNUM
+	clr @CURSX
+	movb @#FILPOS, r3
+	mul #10, r3
+	mov r3, @CURSY
+	call @PRINT
+	clr @CURSX
+	cmp (sp)+, #73
+	beq mvbk
+	incb @#FILPOS
+	inc @#FILNUM
+SELINIT: ; Init cursor
+	add #10, r3
+	br slnew
+mvbk:
+	decb @#FILPOS
+	dec @#FILNUM
+	sub #10, r3
+slnew:
+	mov r3, @CURSY
+PRIVERS: ; Print cursor (inversed file name)
+	bis #41, @PRINTATTRS
+	call @#SEEKNUM
+	call @PRINT
+	bic #41, @PRINTATTRS
+	rts pc
+
+CLRSCR: ; Clear files list from the screen
+	mov @SCRPTR, r1
+	add #360, r1
+	mov #550, r2
+c1loop:
+	clrb (r1)+
+	inc r1
+	sob r2, c1loop
+	mov @SCRPTR, r1
+	inc r1
+	mov #550, r2
+c2loop:
+	clrb (r1)+
+	inc r1
+	sob r2, c2loop
+	rts pc
+
+SWSMP: ; Switch between SMPs
 	mov r4, -(sp)
 	mov #1, r4
-	xor r4, r5	; switch to another SMP
+	xor r4, r5 ; Switch to another SMP
 	mov (sp)+, r4
 	rts pc
 
-INSTR: ; INSTR - prompt a string from the user; arg r.4 — input buffer
-
-	; the code that was setting the baud was removed, see issue #5 for explanation by Piotr
-
-waitkey:
-	jsr	pc,@GETCH	;wait for a key
-	br CLRFLG
-nullflg:
-	cmpb #40, r2 ; spec. char? (PgDn or ignore)
-	bgt isshort
-kdisp:
-	jsr	pc,@PUTCH	;display character r2
-	movb	r2,(r4)+
-isshort:
-	cmpb #24, r2 ;".BIN" shortcut (PgDn button)
-	bne waitkey
-	mov #cartBin, r1
-cpbin:
-	cmp r4, #varArray+13
-	bgt waitkey 
-	movb (r1), r2
-	beq waitkey
-	jsr	pc,@PUTCH	;display character r2
-	movb (r1)+,(r4)+
-	br cpbin
-del:
-	cmp #varArray, r4 ; empty buf? stop erasing!
-	beq waitkey
-	clrb -(r4)
-	jsr	pc,@DELCH
-	br waitkey
-
-CLRFLG: ; clear flags for SU, R/L, V/N, FK...
-	cmpb #15, r2 ; VK key
-	bne nextchk
-	cmp #varArray, r4 ; empty buf? no...
-	beq waitkey
-	rts pc
-nextchk:
-	cmpb #177, r2 ; ZB?
-	beq del
-	mov FLGS, r0
-	mov #7, r1
-cloop:
-	clr (r0)+
-	sob r1, cloop
-	cmp r4, #varArray+13
-	bgt waitkey
-	br nullflg
 
 	; ----------------------------
-	;    M  a  i  n
+	; 	M  a  i  n
 	; ----------------------------
-start:	
-	call @INITTTY
-	
-	mov KBVECT, @#310
 
-	inc @DISCURS ; disable cursor
+main:
+	; Print the Title (continue)
+	bis #41, @PRINTATTRS ; black background
 
-	; LCD controller initialisation
-	mov	@SCRPTR,@#LCDINA
-	mov	#104306,@#LCDINB
-	
-	; Print the Title
-	bis #41, @PRINTATTRS	; black background
-	
 	clr @CURSX ; X=0
 	clr @CURSY ; Y=0
 
-	mov #cartTitle, r1
 	call @PRINT
 
 	bic #41, @PRINTATTRS
+	
+	mov #cartPage, r1
+	call @#PAGPRT
 
 	; Retrieve array of file names
-	call EMULS
-	; Print the List, stopping each 5 rows
-	mov #varArray, r1
-	mov #7, r3
-prntlist:
-	movb (r1), r4
-	cmpb  r4, #377
-	bhis doneprntn
+	call @#EMULS
+	clr r2
+	mov @#TOTALF, r3
+	div #6, r2
+	tst r3
+	beq noncomp
+	inc r2
+noncomp:
+	movb r2, @#LISTT
+	movb r2, r5
+	mov #END-1, r1
+	call @#BTOA
 
-	CALL @PRINT
+	call @#NEWSCR
 
+	clr @CURSX
+	clr r3
+	call @#SELINIT
+
+INLOOP: ; Input handling loop
+	mtps #0
+	mov #342, @#SMPCS
+	wait
+	mtps #340
+
+	mov #FILNUM, r0
+	mov #LISTN, r1
+	mov #FILPOS, r2
+	mov CURSY, r4
+	mov #NEWSCR, r5
+ipgu: ; Previous page
+	cmpb r3, #133
+	bne ipgd
+	cmpb (r1), #1
+	beq INLOOP
+	decb (r1)
+	sub #6, (r0)
+	call (r5)
+	br pggu
+ipgd: ; Next page
+	cmpb r3, #273
+	bne inup
+	cmpb (r1), @#LISTT
+	beq INLOOP
+	incb (r1)
+	mov (r0), r1
+	mov @#TOTALF, r3
 	dec r3
-	beq prntmoar
-	br prntcrlf
-prntmoar:
-	mov r1, -(SP)
-	mov #cartMoar, r1
-	CALL @PRINT
-	inc @DISIND ; disable SU, FK, VR/NR and RUS/LAT indication!
-	CALL @GETCH
-	dec @DISIND ; enable indication (for B2.0 to preserve header line)
-	mov (SP)+, r1
-	mov #7, r3
-prntcrlf:
-	mov r1, -(SP)
-	mov #cartCrlf, r1
-	CALL @PRINT
-	mov (SP)+, r1
-	br prntlist
-doneprntn:
-	mov r1, -(SP)
-	mov #cartCrlf, r1
-	CALL @PRINT
-	mov (SP)+, r1
-	CALL TNYDLY
-	; let the user input file name
-	clr @DISCURS ; enable cursor
-	mov #cartMsgFilename, r1
-	call @PRINT
-	
-	inc @DISIND
-	mov #varArray, r4
-	call INSTR
-	clrb (r4)
+	add #6, r1
+	cmp r1, r3
+	ble iddo
+	sub r3, r1
+	sub r1, (r2)
+	mul #10, r1
+	sub r1, (r4)
+	mov r3, r1
+iddo:
+	mov r1, (r0)
+	call (r5)
+	br pggu
+inup: ; Previous file
+	cmpb r3, #73
+	bne indown
+	tst (r0)
+	beq INLOOP
+	cmpb (r2), #1
+	beq pgup
+	call @#MOVSEL
+	br INLOOP
+pgup:
+	cmpb (r1), #1
+	beq INLOOP
+	decb (r1)
+	movb #6, (r2)
+	dec (r0)
+	call (r5)
+	mov #60, @CURSY
+pggu:
+	clr @CURSX
+	call @#PRIVERS
+	br INLOOP
+indown: ; Next file
+	cmpb r3, #77
+	bne entr
+	mov @#TOTALF, r3
+	dec r3
+	cmp (r0), r3
+	beq INLOOP
+	cmpb (r2), #6
+	beq pgdn
+	call @#MOVSEL
+	br INLOOP
+pgdn:
+	cmpb (r1), @#LISTT
+	beq INLOOP
+	incb (r1)
+	movb #1, (r2)
+	inc (r0)
+	call (r5)
+	clr @CURSX
+	clr r3
+	call @#SELINIT
+	br INLOOP
+entr: ; Write file
+	cmpb r3, #373
+	bne INLOOP
+	call @#SEEKNUM
+	mov r1, r3
+	call @#EMUSEL
+	bis #41, @PRINTATTRS
 
-	mov #varArray, r3
-	call EMUSEL
 
-	dec @DISIND
-	mov #cartCrlf, r1
-	CALL @PRINT
-	
+	; ----------------------------
+	; 	MPO-10 programming
+	; ----------------------------
+
 	clr @#LDADR
-
-	inc @DISCURS ; disable cursor
 copyloop:
+	clr @CURSX
 	mov #cartZap, r1
 	call @PRINT
-	clr @CURSX ; X=0
+	sub #10, @CURSY
 
-	mov	#2000, r4		; number of bytes
-	mov	#10000, r3		; buffer
+	mov	#2000, r4 ; Number of bytes
+	mov	#10000, r3 ; Start address
 	call @#SETCONST
-	
-	mov	r3, -(sp)
-	
-	call @#LOADR
-	
+
+	mov r3, -(sp)
+	call @#LOADR ; Get data from the GenjiSMP
 	mov (sp)+, r3
-	
+
+	mov #SMPIO, r0
 	call @#SWSMP
-	
-	bis	#10,r5		; writing to the SMP
-	mov	r5,(r1)
-	mov	#240, @#SMPCMD	;Write Address
-	jsr	pc,(r2)
-	movb LDADR+1, @#SMPIO	;high address byte
-	jsr	pc,(r2)
-	movb LDADR, @#SMPIO	;low address byte
-	jsr	pc, (r2)
-	tst	@#SMPCMD
-	jsr	pc, (r2)
-	; write data
-	mov	#300, @#SMPCMD	;Write Postincrement
-	jsr	pc,(r2)
+	bis #10, r5 ; Writing to the SMP
+	mov r5, (r1)
+	mov #240, @#SMPCMD ; Write Address
+	call (r2)
+	movb LDADR+1, (r0) ; High address byte
+	call (r2)
+	movb LDADR, (r0) ; Low address byte
+	call (r2)
+	tst @#SMPCMD
+	call (r2)
+	; Write data
+	mov #300, @#SMPCMD ; Write Postincrement
+	call (r2)
 sendoop:
-	movb (r3), @#SMPIO
-	jsr	pc,(r2)
-	inc r3
+	movb (r3)+, (r0)
+	call (r2)
 	cmp r3, #12000
 	bne sendoop
-	
-	call smpdone
+
+	call @#smpdone
 	call @#SWSMP
-	
-	incb @#cartZap+12
+
+	incb @#cartZap+13
 	add #2000, @#LDADR
 	cmp @#LDADR, #24000
 	bne copyloop
-	
+
 	mov #cartDone, r1
 	call @PRINT
-	
+
 	mov #cartArun, r3 ; mount AUTORUN.BIN 
 	call EMUSEL
-	
-	CALL TNYDLY
-	
+
+	mov #177777, r0
+waiting:
+	sob r0, waiting
 	jmp @#173000 ; Reboot!
 
+	; ----------------------------
+	; 	Variables / Strings
+	; ----------------------------
+
+TOTALF: ; Total files
+	.word 0
+FILNUM: ; File number
+	.word 0
+FILPOS: ; File position
+	.byte 1
+LISTN: ; List number
+	.byte 1
+LISTT: ; Total lists
+	.byte 1
+
 cartTitle:
-	.ascii "  Gen-"
-	.byte 16 ; 16o start russ
-	.ascii "PROGGER "
-	.byte 17 ; 17o end russ
-	.ascii "v1.0  "
-	.byte 0
-cartMoar:
-	.ascii " [BK]"
-	.byte 15, 0
-cartArun:
-	.ascii "AUTORUN"
-cartBin:
-	.ascii ".BIN"
-	.byte 0
-cartCrlf:
-	.byte 12,15,0
-cartMsgFilename:
-	.byte 16
-	.ascii "~TO PISATX W mpo-10?"
-	.byte 17,0
+	.asciz \  Gen-\<16>\PROGGER\<17>\ v2.0  \
 cartZap:
-	.byte 16
-	.ascii "zAPISANO 0/10kb..."
-	.byte 0
+	.asciz <16>\ zAPISANO 0/10kb... \
 cartDone:
-	.ascii "mpo-10 ZAPISAN!   "
-	.byte 17,0
+	.asciz \  mpo-10  ZAPISAN!  \
+cartArun:
+	.asciz \AUTORUN.BIN\
+cartPage:
+	.asciz <16>\  sTRANICA\<17>
+CLBUF: 
+	.ascii \000/\
+TTBUF:
+	.asciz \000\
 
 END:
 	varArray = 32000
+
