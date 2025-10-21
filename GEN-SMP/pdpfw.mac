@@ -1,4 +1,4 @@
-	; MK90 Genjitsu-based Catridge Menu 2.0 [universal]
+	; MK90 Genjitsu-based Cartridge Menu 2.0 [universal]
 	; by Akasaka / Genjitsu Labs, 2018
 	; and Bs0Dd [bs0dd.net], 2025
 
@@ -43,7 +43,7 @@ bas1:
 	; 	I n i t i a l i s a t i o n
 	; -------------------------------
 
-	call @INITTTY
+	call @INITTTY ; Init "console"
 	inc @DISCURS ; Disable cursor
 
 	; LCD controller initialisation
@@ -288,14 +288,14 @@ CLRSCR: ; Clear files list from the screen
 	mov @SCRPTR, r1
 	add #360, r1
 	mov #550, r2
-c1loop:
+c1loop: ; First half of the screen
 	clrb (r1)+
 	inc r1
 	sob r2, c1loop
 	mov @SCRPTR, r1
 	inc r1
 	mov #550, r2
-c2loop:
+c2loop: ; Second half of the screen
 	clrb (r1)+
 	inc r1
 	sob r2, c2loop
@@ -315,7 +315,7 @@ main:
 	mov #cartTitle, r1
 	call @PRINT
 
-	bic #41, @PRINTATTRS
+	bic #41, @PRINTATTRS ; Disable inversion
 	
 	mov #cartPage, r1
 	call @#PAGPRT
@@ -324,10 +324,10 @@ main:
 	call @#EMULS
 	clr r2
 	mov @#TOTALF, r3
-	div #6, r2
+	div #6, r2 ; Total pages (1 page - 6 files)
 	tst r3
 	beq noncomp
-	inc r2
+	inc r2 ; Round if remainder is non-zero
 noncomp:
 	movb r2, @#LISTT
 	movb r2, r5
@@ -342,7 +342,7 @@ noncomp:
 
 INLOOP: ; Input handling loop
 	mtps #0
-	mov #342, @#SMPCS
+	mov #342, @#SMPCS ; Enable interrupts from the keyboard
 	wait
 	mtps #340
 
