@@ -7,12 +7,39 @@
 	.= 0 ; Beginning of cartridge
 	NOP ; Obligatory!
 
-	LCDINA = 164000
-	LCDINB = 164002
-	SMPCMD = 164026
-	SMPBAUD = 164022
-	SMPCS = 164024
-	SMPIO = 164020
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+
+	; Screen controller
+	LCDINA = 164000 ; Controller config
+	LCDINB = 164002 ; Screen RAM pointer
+
+	; Serial controller (keyboard, SMP)
+	SMPCMD = 164026 ; Command port
+	SMPBAUD = 164022 ; Baudrate port
+	SMPCS = 164024 ; Config and status port
+	SMPIO = 164020 ; Input/Output port
+
+	; SMP commands
+	WRADR = 240 ; Standard [0xA0] - Write Address
+	WRINC = 300 ; Standard [0xC0] - Write Postincrement
+	RDINC = 320 ; Standard [0xD0] - Read Postincrement
+	GNLST = 360 ; Genjitsu [0xF0] - List Files In Card
+	GNMNT = 361 ; Genjitsu [0xF1] - Select File Name
+
+	; Keyboard scancodes
+	KEYLEFT = 133 ; Key "Left"
+	KEYRIGHT = 273 ; Key "Right"
+	KEYUP = 73 ; Key "Up"
+	KEYDOWN = 77 ; Key "Down"
+	KEYENTER = 373 ; Key "VK" (Enter)
+
+
+	; -------------------------------
+	; 	BASIC detection / Full load
+	; -------------------------------
 
 	mov r5, -(sp)
 
@@ -58,11 +85,16 @@ bas1:
 
 	jmp @#main ; Go to the main part
 
+
+	; -------------------------------
+	; 	Full data loader
+	; -------------------------------
+
 LOADR: ; SMP data loader
 	mtps #340 ; Disable interrupts
 	bis #10, r5 ; Writing to the SMP
 	mov r5, (r1)
-	mov #240, @#SMPCMD ; Write Address
+	mov #WRADR, @#SMPCMD ; Write Address
 	call (r2)
 	movb LDADR+1, @#SMPIO ; High address byte
 	call (r2)
@@ -71,7 +103,7 @@ LOADR: ; SMP data loader
 	tst @#SMPCMD
 	call (r2)
 	; Load data
-	mov #320, @#SMPCMD ; Read Postincrement
+	mov #RDINC, @#SMPCMD ; Read Postincrement
 	call (r2)
 	bic #10, r5 ; Reading from the SMP
 	mov r5, (r1)
@@ -87,6 +119,10 @@ smpdone: ; Addition to fix keyboard, thanks Piotr
 
 LDADR:
 	.word 774 ; (start from o774 to restore data smashed by the stack)
+
+	; -------------------------------
+	; 	OS-dependent constants
+	; -------------------------------
 
 ; Addresses for BASIC 1.0 (used by default)
 PRINTATTRS:
@@ -143,7 +179,7 @@ EMULS: ; List the files on the EMU Cart
 	; Select SMP address
 	bis #10, r5 ; Writing to the SMP
 	mov r5, (r1)
-	mov #360, @#SMPCMD ; CMD: 0xF0 List Files In Card
+	mov #GNLST, @#SMPCMD ; CMD: 0xF0 List Files In Card
 	call (r2)
 	bic #10, r5 ; CMD: reading from the SMP
 	mov r5, (r1)
@@ -165,7 +201,7 @@ EMUSEL: ; Set the emulated file name - zero terminated in r3
 	mov 2(sp), r5 ; Restore SMP number from the first stack item
 	bis #10, r5 ; Writing to the SMP
 	mov r5, (r1)
-	mov #361, @#SMPCMD ; CMD: 0xF1 Select File Name
+	mov #GNMNT, @#SMPCMD ; CMD: 0xF1 Select File Name
 	call (r2)
 	; Write everything at r3 until 0x00 (inclusing 0x00)
 selloop:
@@ -364,7 +400,7 @@ INLOOP: ; Input handling loop
 	mov CURSY, r4
 	mov #NEWSCR, r5
 ipgu: ; Previous page
-	cmpb r3, #133
+	cmpb r3, #KEYLEFT
 	bne ipgd
 	cmpb (r1), #1
 	beq INLOOP
@@ -373,7 +409,7 @@ ipgu: ; Previous page
 	call (r5)
 	br pggu
 ipgd: ; Next page
-	cmpb r3, #273
+	cmpb r3, #KEYRIGHT
 	bne inup
 	cmpb (r1), @#LISTT
 	beq INLOOP
@@ -394,7 +430,7 @@ iddo:
 	call (r5)
 	br pggu
 inup: ; Previous file
-	cmpb r3, #73
+	cmpb r3, #KEYUP
 	bne indown
 	tst (r0)
 	beq INLOOP
@@ -415,7 +451,7 @@ pggu:
 	call @#PRIVERS
 	br INLOOP
 indown: ; Next file
-	cmpb r3, #77
+	cmpb r3, #KEYDOWN
 	bne entr
 	mov @#TOTALF, r3
 	dec r3
@@ -437,7 +473,7 @@ pgdn:
 	call @#SELINIT
 	br INLOOP
 entr: ; Write file
-	cmpb r3, #373
+	cmpb r3, #KEYENTER
 	bne INLOOP
 	call @#SEEKNUM
 	mov r1, r3
@@ -468,7 +504,7 @@ copyloop:
 	call @#SWSMP
 	bis #10, r5 ; Writing to the SMP
 	mov r5, (r1)
-	mov #240, @#SMPCMD ; Write Address
+	mov #WRADR, @#SMPCMD ; Write Address
 	call (r2)
 	movb LDADR+1, (r0) ; High address byte
 	call (r2)
@@ -477,7 +513,7 @@ copyloop:
 	tst @#SMPCMD
 	call (r2)
 	; Write data
-	mov #300, @#SMPCMD ; Write Postincrement
+	mov #WRINC, @#SMPCMD ; Write Postincrement
 	call (r2)
 sendoop:
 	movb (r3)+, (r0)
@@ -497,7 +533,7 @@ sendoop:
 	call @PRINT
 
 	mov #cartArun, r3 ; Mount AUTORUN.BIN 
-	call EMUSEL
+	call @#EMUSEL
 
 	mov #177777, r0
 waiting:
