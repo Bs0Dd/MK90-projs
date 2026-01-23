@@ -1,0 +1,205 @@
+	; PerReg - Peripheral registers search and viewing program
+	; Made by Bs0Dd [bs0dd.net], 2026
+
+	.ENABL AMA 	; Absolute addressing
+	.ASECT		; Absolute section
+	.= 0		; Beginning of cartridge
+	NOP 		; Obligatory!
+	
+	br init
+	
+; --------------------
+.= 4
+	.word trap4, 0 ; BUS ERROR vector
+; --------------------
+
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+	
+	; Screen controller
+	LCDINA = 164000 ; Controller config
+	LCDINB = 164002 ; Screen RAM pointer
+	
+	; Serial controller (keyboard)
+	SMPCMD = 164026 ; Command port
+	SMPCS = 164024 ; Config and status port
+
+
+	; -------------------------------
+	; 	OS-dependent constants
+	; -------------------------------
+
+; Addresses for BASIC 1.0 (used by default)
+PRINTATTRS:
+	.word 34072
+PRINT:
+	.word 153414
+INITRAM:
+	.word 153700
+INITTTY:
+	.word 120536
+SCRPTR:
+	.word 34022
+ITOO:
+	.word 100040
+KBVECT:
+	.word 173776
+CURSX:
+	.word 34044
+CURSY:
+	.word 33726
+
+; Addresses for BASIC 2.0
+SPRATTRS:
+	.word 6534
+SPRINT:
+	.word 160372
+SINITRAM:
+	.word 145154
+SINITTTY:
+	.word 122324
+SSCRPTR:
+	.word 6402
+SITOO:
+	.word 100032
+SKBVECT:
+	.word 173772
+SCURSX:
+	.word 6506
+SCURSY:
+	.word 6120
+
+
+	; -------------------------------
+	; 	I n i t i a l i s a t i o n
+	; -------------------------------
+
+init:
+	cmpb @#115252, #62 ; BASIC 2.0? (second vectors set)
+	bne bas1
+	mov #SPRATTRS, r1
+	mov #PRINTATTRS, r5
+	mov #11, r2
+b2a:
+	mov (r1)+, (r5)+
+	sob r2, b2a
+
+bas1:
+	mov KBVECT, @#310 ; Keyboard handler vector
+	call @INITRAM	; OS initialisation
+	mov #30000, @SCRPTR
+	call @INITTTY
+	
+	mov #27476, sp   ; Move stack to nearly end of RAM
+	
+	; LCD controller initialisation
+	mov	@SCRPTR,@#LCDINA
+	mov	#104306,@#LCDINB
+	
+	; Print the Title
+	bis #41, @PRINTATTRS	; Black background
+	
+	clr @CURSX ; X=0
+	clr @CURSY ; Y=0
+
+	mov #lbl, r1
+	call @PRINT
+
+	bic #41, @PRINTATTRS
+	
+	mov #zn5, r1
+	call @PRINT
+	
+	br next
+
+cntr:
+	.byte 6
+
+lbl:
+	.asciz <16>\ TEST PERIF. REGIS. \<12>
+zn5:
+	.asciz \zONA PERIF 1 (ap5): \
+wk:
+	.asciz \nAVMI KNOPKU\
+
+; ------------
+.=310
+	.word 0, 0 ; Keyboard handler vector (to be filled)
+; ------------
+
+
+next:
+	mov #164000, r5
+znlp:
+	clr r4
+	mov (r5), r1
+	tst r4
+	bne skip
+	mov #b2end, r0
+	call @#convi
+	mov r5, r1
+	mov #equ, r0
+	call @#convi
+	mov r0, r1
+	call @PRINT
+	decb @#cntr
+	bne skip
+uswait:
+	mov #wk, r1
+	call @PRINT
+	mov #342,@#SMPCS
+	wait
+	mov #362,@#SMPCS
+	mov #b2end, r1
+	call @PRINT
+	movb #6, @#cntr
+skip:
+	add #2, r5
+	cmp r5, @#border
+	bne znlp
+	
+	tst @#border
+	bne zn7st
+	
+	mov #tend, r1
+	call @PRINT
+	
+stop:
+	br stop
+	
+zn7st:	
+	mov #zn7, r1
+	call @PRINT
+	
+	mov #176776, r5
+	clr @#border
+	br uswait
+
+trap4:
+	inc r4
+	rti
+
+convi:
+	mov #6, r4
+	call @ITOO ; Convert the word in r1 to octal ASCII
+	bicb #16, (r0) ; Fix last ASCII digit in BASIC 1.0
+	rts pc
+
+zn7:
+	.asciz \zONA PERIF 2 (ap7): \
+tend:
+	.asciz \tEST ZAWER[EN!\
+
+border:
+	.word 166000
+
+buf1:
+	.ascii \000000\
+equ:
+	.ascii \ = \
+buf2:
+	.ascii \000000\
+b2end:
+	.asciz <15><12>
