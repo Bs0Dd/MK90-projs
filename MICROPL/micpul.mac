@@ -1,0 +1,243 @@
+	; MikroPult - adaptation of PATCH tool from BASIC 2.0 to 1.0
+	; Adapted by Bs0Dd [bs0dd.net], 2026
+
+	.ENABL AMA 	; Absolute addressing
+	.ASECT		; Absolute section
+	.= 0		; Beginning of cartridge
+	NOP 		; Obligatory!
+	
+	br init
+	
+	; Screen controller
+	LCDINA = 164000 ; Screen RAM pointer
+	LCDINB = 164002 ; Controller config
+	
+	; BASIC 1.0 routines and variables
+	PRINTATTRS = 34072
+	PRINT = 153414
+	INITRAM = 153700
+	INITTTY = 120536
+	GETCH = 131120
+	PUTCH = 116542
+	KBVECT = 130514
+	TRAPS = 100152
+	SCRPTR = 34022
+	CURSX = 34044
+	CURSY = 33726
+	
+; --------------------
+.= 4
+	.word trap4, 0
+; --------------------
+
+init:
+	mov #27476, sp   ; Move stack to nearly end of RAM
+	
+	call @#INITRAM	; OS initialisation
+	call @#INITTTY
+	
+	; LCD controller initialisation
+	mov	@#SCRPTR,@#LCDINA
+	
+	br cntin
+
+; --------------------
+.= 34
+	.word TRAPS, 0
+; --------------------
+
+cntin:
+	mov	#104306,@#LCDINB
+	
+	; Print the Title
+	bis #41, @#PRINTATTRS	; black background
+	
+	clr @#CURSX ; X=0
+	clr @#CURSY ; Y=0
+
+	mov #lbl, r1
+	call @#PRINT
+
+	bic #41, @#PRINTATTRS
+
+start:
+	;br start
+	clr	var1
+	jsr	pc,js1
+br9:
+	clr	r3
+	clr	r4
+br2:
+	jsr	pc,@#GETCH	;wait for a key
+	cmp	#60,r2
+	bhi	br1
+	cmp	#67,r2
+	blo	br1
+	trap	00		;print character r2
+	bic	#177770,r2
+	asl	r4
+	asl	r4
+	asl	r4
+	add	r2,r4
+	inc	r3
+	br	br2
+br1:
+	clr	r0
+br4:
+	cmpb	r2,cmds(r0)
+	beq	br3
+	inc	r0
+	cmp	r0,#10
+	bhis	br5
+	br	br4
+br3:
+	trap	00		;print character r2
+	asl	r0
+	jmp	@cmdad(r0)
+
+br5:
+	cmp	#40,r2
+	bhi	br6
+	cmp	#177,r2
+	beq	br6
+	trap	00		;print character r2
+br6:
+	mov	#77,r2
+	trap	00		;print character r2
+	br	start
+js1:
+	jsr	pc,js2
+	mov	#52,r2
+	trap	00		;print character r2
+	br	br0
+js2:
+	trap	02		;print CR, LF
+br0:
+	rts	pc
+	
+js3:
+	tst	r3
+	beq	br0
+	mov	var2,r0
+	clc
+	cmp	#1,var1
+	bne	br7
+	movb	r4,(r0)
+	br	br0
+
+; --------------------
+.= 310
+	.word KBVECT, 0
+; --------------------
+
+br7:
+	mov	r4,(r0)
+	br	br0
+sw1:
+	mov	#2,var1
+	tst	r3
+	beq	br8
+	mov	r4,var2
+br8:
+	mov	var2,r4
+	asr	r4
+br15:
+	blo	br6
+	mov	var2,r0
+	clc
+	mov	(r0),r1
+	blo	br6
+	mov	(r0),r5
+	mov	#6,r4		;number of digits
+br13:
+	jsr	pc,octfix
+	mov	#40,r2
+	trap	00		;print character r2
+	br	br9
+sw2:
+	jsr	pc,js3
+	br	start
+sw4:
+	tst	var1
+	beq	br6
+	jsr	pc,js3
+	add	var1,var2
+br12:
+	mov	var2,r1
+	jsr	pc,js2
+	mov	#6,r4		;number of digits
+	jsr	pc,octfix
+	cmp	#2,var1
+	beq	br10
+	mov	#134,r2
+	trap	00		;print character r2
+	br	br11
+br10:
+	mov	#57,r2
+	trap	00		;print character r2
+	br	br8
+sw3:
+	tst	var1
+br14:
+	beq	br6
+	jsr	pc,js3
+	sub	var1,var2
+	br	br12
+sw8:
+	jmp 173000		; Reboot!
+sw5:
+	jsr	pc,js3
+	mov	r5,var2
+	br	br12
+sw6:
+	mov	#1,var1
+	tst	r3
+	beq	br11
+	mov	r4,var2
+br11:
+	mov	var2,r0
+	clc
+	movb	(r0),r1
+	bic	#177400,r1
+	blo	br6
+	mov	#3,r4
+	br	br13
+sw7:
+	tst	r3
+	beq	br14
+	mov	r4,var2
+	asr	r4
+	blo	br15
+	jmp	@var2
+	
+octfix: ; fix bugged result from converter (7xxxxx instead of 1xxxxx)
+	mov	#cmdad,r0		;buffer for the octal number
+	clrb	-(r0)
+	jsr	pc,100040		;convert the word in r1 to octal ASCII
+	bicb #16, octbuf ; fix ASCII
+	trap	66		;print a string pointed to by r0
+	rts pc
+
+trap4:
+	bis	#1,0002(sp)
+	rti
+
+lbl:
+	.asciz <16>\MIKROPULXT    WR LAT\<17>
+
+octbuf:
+	.blkb 7
+
+cmdad:
+	.word	sw1, sw2, sw3, sw4
+	.word	sw5, sw6, sw7, sw8
+
+cmds:
+	.byte	57, 15, 34, 35		; / VK UP DN
+	.byte	100, 134, 107, 105	; @ \  G  E
+
+var1:
+	.word 0
+
+var2:
+	.word 0
