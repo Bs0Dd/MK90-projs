@@ -1,5 +1,5 @@
 	; MK90 STMP/PIMP unmounter (BOOTL zone) for Basic [1.0/2.0]
-	; Bs0Dd [bs0dd.net], 2025
+	; Bs0Dd [bs0dd.net], 2025-2026
 
 	.ENABL AMA 	; Absolute addressing
 	.ASECT		; Absolute section
@@ -66,26 +66,16 @@ isvk:
 	beq umount
 	jmp @#173000 ; Reboot!
 umount:
-	mov #AUTORUN, r3
-; Set the emulated file name - zero terminated in r3
+; Reset emulated file
 	mov	#11,@#SMPBAUD ; CONST: transfer rate
 	mov	#SMPCS,r1	 ; CONST: control/status register
 	mov	#WAITCOMM,r2	 ; CONST: procedure 'wait for the transfer completed'
 	bis	#10,@#REGI	; writing to the SMP
 	mov	@#REGI,(r1)
-	mov	#361,@#SMPCMD	;cmd: 0xF1 Select File Name
+	mov	#362,@#SMPCMD	;cmd: 0xF2 Unmount File
 	jsr	pc,(r2)
-; Write everything at r3 until 0x00 (inclusing 0x00)
-selloop:
-	movb (r3), @#SMPIO
-	jsr	pc,(r2)
-	tstb (r3)
-	beq smpdone
-	inc r3
-	br selloop
-smpdone:
 	tst	@#SMPCMD
-	jsr	pc, (r2)
+	jsr	pc,(r2)
 	mov	@#REGI, r5
 	mov #177777, r0
 waiting:
@@ -100,14 +90,12 @@ KEYB:
 ; --------------------
 
 cartTitle:
-	.asciz \   Gen-UMOUNT 1.0   \
+	.asciz \   Gen-UMOUNT 1.1   \
 select:
 	.ascii <16><12>\rAZMONTIROWATX OBRAZW \<17>\STMP/PIMP? \<16>\(smp\
 smnum:
 	.ascii \0\
 	.asciz \)\<12><12><15>\zb - wYPOLNITX\<12><15>\wk - I ZAGRUZITXSQ,\<12><15>\     INA^E WOZWRAT.\
-AUTORUN:
-	.asciz \AUTORUN.BIN\
 REGI:
 	.word 0
 	
