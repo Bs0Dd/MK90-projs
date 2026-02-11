@@ -1,6 +1,6 @@
 	; MPO-10 progger from Genjitsu compatible cartridge
-	; Version 2.0 [universal]
-	; Bs0Dd [bs0dd.net], 2025
+	; Version 2.1 [universal]
+	; Bs0Dd [bs0dd.net], 2025-2026
 
 	.ENABL AMA ; Absolute addressing
 	.ASECT ; Absolute section
@@ -13,8 +13,8 @@
 	; -------------------------------
 
 	; Screen controller
-	LCDINA = 164000 ; Controller config
-	LCDINB = 164002 ; Screen RAM pointer
+	LCDINA = 164000 ; Screen RAM pointer
+	LCDINB = 164002 ; Controller config
 
 	; Serial controller (keyboard, SMP)
 	SMPCMD = 164026 ; Command port
@@ -28,6 +28,7 @@
 	RDINC = 320 ; Standard [0xD0] - Read Postincrement
 	GNLST = 360 ; Genjitsu [0xF0] - List Files In Card
 	GNMNT = 361 ; Genjitsu [0xF1] - Select File Name
+	GNUMT = 362 ; Genjitsu [0xF2] - Unmount Selected File
 
 	; Keyboard scancodes
 	KEYLEFT = 133 ; Key "Left"
@@ -201,6 +202,7 @@ EMUSEL: ; Set the emulated file name - zero terminated in r3
 	mov 2(sp), r5 ; Restore SMP number from the first stack item
 	bis #10, r5 ; Writing to the SMP
 	mov r5, (r1)
+ecmd:
 	mov #GNMNT, @#SMPCMD ; CMD: 0xF1 Select File Name
 	call (r2)
 	; Write everything at r3 until 0x00 (inclusing 0x00)
@@ -532,7 +534,8 @@ sendoop:
 	mov #cartDone, r1
 	call @PRINT
 
-	mov #cartArun, r3 ; Mount AUTORUN.BIN 
+	mov #END-1, r3 ; Transfer byte 0x00
+	inc @#ecmd+2 ; 0xF1 -> 0xF2, CMD: 0xF2 Unmout Selected File
 	call @#EMUSEL
 
 	mov #177777, r0
@@ -556,13 +559,11 @@ LISTT: ; Total lists
 	.byte 1
 
 cartTitle:
-	.asciz \  Gen-\<16>\PROGGER\<17>\ v2.0  \
+	.asciz \  Gen-\<16>\PROGGER\<17>\ v2.1  \
 cartZap:
 	.asciz <16>\ zAPISANO 0/10kb... \
 cartDone:
 	.asciz \  mpo-10  ZAPISAN!  \
-cartArun:
-	.asciz \AUTORUN.BIN\
 cartPage:
 	.asciz <16>\  sTRANICA\<17>
 CLBUF: 
@@ -572,4 +573,3 @@ TTBUF:
 
 END:
 	varArray = 32000
-
