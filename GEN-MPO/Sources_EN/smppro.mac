@@ -1,0 +1,922 @@
+	; #####################################################
+	; SMP Memory Programmer for Genjitsu 1.0 EN [universal]
+	; SMP (e.g. MPO-10) cartridge writer
+	; by Bs0Dd [bs0dd.net], 2025-2026
+	; #####################################################
+
+	.ENABL AMA ; Absolute addressing
+	.ASECT ; Absolute section
+	.= 0 ; Beginning of cartridge
+	NOP ; Obligatory!
+
+
+	; -------------------------------
+	; 	C o n s t a n t s
+	; -------------------------------
+
+	; Screen controller
+	LCDINA = 164000 ; Controller config
+	LCDINB = 164002 ; Screen RAM pointer
+
+	; Serial controller (keyboard, SMP)
+	SMPCMD = 164026 ; Command port
+	SMPBAUD = 164022 ; Baudrate port
+	SMPCS = 164024 ; Config and status port
+	SMPIO = 164020 ; Input/Output port
+
+	; Interrupt vectors
+	KVADRR = 310 ; Keyboard interrupt vector address (2 words)
+
+	; Memory mapping
+	FILSPA = 21000 ; Received files list
+	STACKA = 32000 ; Stack pointer
+
+	; Special addresses
+	BOTADR = 173000 ; Machine's initial address
+
+	; SMP commands
+	WRADR = 240 ; Standard [0xA0] - Write Address
+	WRINC = 300 ; Standard [0xC0] - Write Postincrement
+	RDINC = 320 ; Standard [0xD0] - Read Postincrement
+	GNLST = 360 ; Genjitsu [0xF0] - List Files In Card
+	GNMNT = 361 ; Genjitsu [0xF1] - Select File Name
+	GNUMT = 362 ; Genjitsu [0xF2] - Unmount Current Image
+
+	; Keyboard scancodes
+	KEYLEFT = 133 ; Key "Left"
+	KEYRIGHT = 273 ; Key "Right"
+	KEYUP = 73 ; Key "Up"
+	KEYDOWN = 77 ; Key "Down"
+	KEYBKSP = 333 ; Key "ZB" (Backspace)
+	KEYENTER = 373 ; Key "VK" (Enter)
+	KEYS = 63 ; Key "S"
+	KEYN = 257 ; Key "N"
+	KEYR = 023 ; Key "R"
+	KEYD = 213 ; Key "D"
+	KEYP = 357 ; Key "P"
+	KEYY = 167 ; Key "Y"
+	KEY1 = 043 ; Key "1"
+	KEY2 = 103 ; Key "2"
+	KEY3 = 143 ; Key "3"
+
+
+	; -------------------------------
+	; 	BASIC detection / Full load
+	; -------------------------------
+
+	mov r5, -(sp)
+
+	cmpb @#115252, #62 ; BASIC 2.0? (second vectors set)
+	bne bas1
+	mov #SPRATTRS, r1
+	mov #PRINTATTRS, r5
+	mov #14, r2
+b2a:
+	mov (r1)+, (r5)+
+	sob r2, b2a
+
+bas1:
+	call @INITRAM ; OS initialisation
+	mov #30000, @SCRPTR ; Screen memory always at 30000 
+
+	mov (sp), r5
+	mov #STACKA, sp ; Move stack to nearly end of RAM
+	mov r5, -(sp) ; Save current SMP slot number
+
+	call @#SETCONST
+	mov #END-774, r4 ; Number of bytes
+	mov #774, r3
+	call @#LOADR ; Load full data
+
+
+	; -------------------------------
+	; 	I n i t i a l i s a t i o n
+	; -------------------------------
+
+	call @INITTTY ; Init "console"
+
+	; LCD controller initialisation
+	mov @SCRPTR, @#LCDINA
+	mov #104306, @#LCDINB
+
+	jmp @#MAIN ; Go to the main part
+
+
+	; -------------------------------
+	; 	Full data loader
+	; -------------------------------
+
+LOADR: ; SMP data loader
+	mtps #340 ; Disable interrupts
+	mov #WRADR, @#SMPCMD ; Write Address
+	call (r2)
+	movb LDADR+1, @#SMPIO ; High address byte
+	call (r2)
+	movb LDADR, @#SMPIO ; Low address byte
+	call (r2)
+	tst @#SMPCMD
+	call (r2)
+	; Load data
+	mov #RDINC, @#SMPCMD ; Read Postincrement
+	call (r2)
+	bic #10, r5 ; Reading from the SMP
+	mov r5, (r1)
+	call (r2)
+nxtb:
+	movb @#SMPIO, (r3)+ ; Read data byte from the SMP to the RAM
+	call (r2)
+	sob r4, nxtb ; Next data byte
+smpdone: ; Addition to fix keyboard, thanks to Piotr
+	tst @#SMPCMD
+	call (r2)
+	rts pc
+
+LDADR:
+	.word 774 ; (start from o774 to restore data smashed by the stack)
+
+
+	; -------------------------------
+	; 	OS-dependent constants
+	; -------------------------------
+
+; Addresses for BASIC 1.0 (used by default)
+PRINTATTRS:
+	.word 34072
+PRINT:
+	.word 153414
+INITRAM:
+	.word 153700
+INITTTY:
+	.word 120536
+WAITCOMM:
+	.word 174506
+PUTCH:
+	.word 116542
+DELCH:
+	.word 120670
+SCRPTR:
+	.word 34022
+DISIND:
+	.word 34074
+DISCURS:
+	.word 34076
+CURSX:
+	.word 34044
+CURSY:
+	.word 33726
+
+; Addresses for BASIC 2.0
+SPRATTRS:
+	.word 6534
+SPRINT:
+	.word 160372
+SINITRAM:
+	.word 145154
+SINITTTY:
+	.word 122324
+SWAITCOMM:
+	.word 174546
+SPUTCH:
+	.word 120034
+SDELCH:
+	.word 122462
+SSCRPTR:
+	.word 6402
+SDISIND:
+	.word 6536
+SDISCURS:
+	.word 6540
+SCURSX:
+	.word 6506
+SCURSY:
+	.word 6120
+
+; ---------------------------
+.= KVADRR
+	.word KEYINT, 0 ; Keyboard handler vector
+
+; ---------------------------
+SETCONST: ; Set SMP transfer constants (special procedure - must be available before full load)
+	mov #11, @#SMPBAUD ; CONST: transfer rate
+	mov #SMPCS, r1 ; CONST: control/status register
+	mov WAITCOMM, r2 ; CONST: procedure 'wait for the transfer completed'
+	bis #10, r5 ; CMD: writing to the SMP
+	mov r5, (r1)
+	rts pc
+; ---------------------------
+
+
+	; -------------------------------
+	; 	Commands to control the EMU 
+	; -------------------------------
+
+EMULST: ; List the files on the EMU Cart
+	call @#SETCONST
+	; Select SMP address
+	mov #GNLST, @#SMPCMD ; CMD: 0xF0 List Files In Card
+	call (r2)
+	bic #10, r5 ; CMD: reading from the SMP
+	mov r5, (r1)
+	call (r2)
+	mov #FILSPA, r3
+lsloop:
+	movb @#SMPIO, (r3)
+	call (r2)
+	movb (r3)+, r4
+	bne nonzero 
+	inc @#TOTALF ; Terminator - one filename received!
+nonzero:
+	cmpb r4, #377 ; Check if last one 0xFF
+	bhis smpdone ; And go out
+	br lsloop ; Otherwhise go on
+
+EMUSEL: ; Set the emulated file name - zero terminated in r3
+	call @#SETCONST
+	mov #GNMNT, @#SMPCMD ; CMD: 0xF1 Select File Name
+	call (r2)
+
+EMUSND: ; Send zero-terminated buffer at r3 (including zero)
+	movb (r3), @#SMPIO
+	call (r2)
+	tstb (r3)+
+	bne EMUSND
+	br smpdone
+
+EMUUMT: ; Unmount current image
+	call @#SETCONST
+	mov #GNUMT, @#SMPCMD ; CMD: 0xF2 Unmount Current Image
+	call (r2)
+	br smpdone
+
+
+	; ---------------------------
+	; 	P r o c e d u r e s 
+	; ---------------------------
+
+KEYINT: ; Keyboard interrupt service routine
+	call @#SETCONST
+	mov #362, (r1)
+	clr @#SMPCMD ; Start of the transfer
+	call (r2)
+	movb @#SMPCMD, r3 ; Key scan code, end of the transfer
+	call (r2)
+	mov #352, (r1)
+	rti
+
+TNYDLY: ; Tiny delay
+	mov #177777, r4
+waiting:
+	sob r4, waiting
+	rts pc
+
+BTOA: ; Byte to ASCII
+	mov #2, r2
+btc:
+	clr r4
+	div #12, r4
+	add #60, r5
+	movb r5, -(r1)
+	mov r4, r5
+	sob r2, btc
+	rts pc
+
+ATOB: ; Convert ASCII (2 chars) into a byte
+	mov #fszBuf, r5
+	movb (r5)+, r4
+	sub #60, r4
+	movb r4, r3
+	movb (r5), r4
+	beq atbfend
+	sub #60, r4
+	mul #12, r3
+	add r4, r3
+atbfend:
+	rts pc
+
+NOCRPRT: ; Print with temporary disabled cursor
+	inc @DISCURS ; Disable cursor
+	call @PRINT
+	clr @DISCURS ; Enable cursor
+	rts pc
+
+SETSCR: ; Prepare a screen for sub-program (clear screen)
+	mov @SCRPTR, r3
+	mov #740, r2
+scsclp:
+	clr (r3)+
+	sob r2, scsclp
+SETSCN: ; Prepare a screen for main program (without screen clearing)
+	bis #41, @PRINTATTRS ; Black background
+	clr @CURSX ; X=0
+	clr @CURSY ; Y=0
+	call @PRINT
+	bic #41, @PRINTATTRS ; Normal background
+	rts pc
+
+CLSTCL: ; Current list number to ASCII
+	mov #TTBUF-1, r1
+	movb @#LISTN, r5
+	call @#BTOA
+PRIAPG: ; Print at page number
+	mov #74, @CURSX
+PAGPRT: ; For "Page" line print
+	mov #70, @CURSY
+	call @PRINT
+	rts pc
+
+SEEKNUM: ; Seek file name by the number
+	mov #FILSPA, r1
+	mov @#FILNUM, r3
+SEEKALT:
+	beq skend
+skloop:
+	tstb (r1)+
+	bne skloop
+	dec r3
+	bne skloop
+skend:
+	rts pc
+
+FILLST: ; Fill screen with 6 files (one page)
+	mov #FILSPA, r1
+	movb @#FILPOS, r2
+	mov @#FILNUM, r3
+	sub r2, r3
+	inc r3
+	call @#SEEKALT
+	mov #6, r3
+lstloop:
+	movb (r1), r4
+	cmpb  r4, #377
+	bhis listend
+	call @PRINT
+	clr @CURSX ; CR
+	add #10, @CURSY ; LF
+	sob r3, lstloop
+listend:
+	rts pc
+
+NEWSCR: ; Draw new files page
+	mov @CURSY, -(sp)
+	call @#CLSTCL
+	clr @CURSX
+	mov #10, @CURSY
+	call @#CLRSCR
+	call @#FILLST
+	mov (sp)+, @CURSY
+	rts pc
+
+MOVSEL: ; Move file selection cursor
+	movb r3, -(sp)
+	call @#SEEKNUM
+	clr @CURSX
+	movb @#FILPOS, r3
+	mul #10, r3
+	mov r3, @CURSY
+	call @PRINT
+	clr @CURSX
+	cmpb (sp)+, #KEYUP
+	beq mvbk
+	incb @#FILPOS
+	inc @#FILNUM
+SELFRST: ; Print cursor at first line
+	add #10, r3
+	br SELINIT
+mvbk:
+	decb @#FILPOS
+	dec @#FILNUM
+	sub #10, r3
+SELINIT: ; Init cursor
+	mov r3, @CURSY
+PRIVERS: ; Print cursor (inverted file name)
+	bis #41, @PRINTATTRS
+	call @#SEEKNUM
+	call @PRINT
+	bic #41, @PRINTATTRS
+	rts pc
+
+CLRSCR: ; Clear files list from the screen
+	mov @SCRPTR, r1
+	add #360, r1
+	mov #550, r2
+c1loop: ; First half of the screen
+	clrb (r1)+
+	inc r1
+	sob r2, c1loop
+	mov @SCRPTR, r1
+	inc r1
+	mov #550, r2
+c2loop: ; Second half of the screen
+	clrb (r1)+
+	inc r1
+	sob r2, c2loop
+	rts pc
+
+INNUMB: ; Prompt a number (2-digit) from the user
+	clr r0
+	mov #fszBuf, r4
+imilop:
+	mtps #0
+	wait
+	mtps #340
+	cmpb r3, #KEYENTER ; Enter
+	bne imera
+	tst r0
+	beq imilop ; Empty buf? no...
+	br imend
+imera:
+	cmpb r3, #KEYBKSP ; Erase
+	bne imleve
+	tst r0
+	beq imilop ; Empty buf? no...
+	clrb -(r4)
+	dec r0
+	call @DELCH
+	br imilop
+imleve:
+	cmpb r3, #KEYLEFT ; Leave
+	bne iminxs
+	inc @DISCURS
+	movb #377, @#STATEX ; Input cancelled
+	br imretn
+iminxs:
+	clr r2
+iminxt:
+	cmpb r3, fstNLTB(r2)
+	beq imadd
+	inc r2
+	cmp r2, #13
+	beq imilop ; Keys 0-9 was not pressed
+	br iminxt
+imadd:
+	add #60, r2 ; To ASCII
+	movb r2, (r4)+
+	inc r0
+	call @PUTCH
+	tstb @#STATEX
+	bne imilop
+	cmp r0, #2 ; Leave after 2 characters inserted
+	bne imilop
+imend:
+	clrb @#STATEX ; Number entered
+imretn:
+	rts pc
+
+LEVSUB: ; Leave sub-program
+	inc @DISCURS
+	mov #cartTitle, r1
+	call @#SETSCR
+	clr @#TOTALF
+	mov #STACKA-2, sp ; Stack reset
+	mov (sp), r5
+	jmp @#backpnt
+
+
+	; ----------------------------
+	; 	M  a  i  n
+	; ----------------------------
+
+MAIN: ; Main menu
+	inc @DISCURS ; Disable cursor
+	mov #cartTitle, r1
+	call @#SETSCN
+backpnt: ; Backpoint to leave from sub-programs
+	mov #cartMenu, r1
+	call @PRINT
+startkb:
+	mov #342, @#SMPCS ; Enable interrupts from the keyboard
+MAINLP: ; Main menu input handling loop
+	mtps #0
+	wait
+	mtps #340
+writer: ; Write to SMP
+	cmpb r3, #KEY1
+	bne setzone
+	br MPOWRT
+setzone: ; Set SMP area
+	cmpb r3, #KEY2
+	bne leave
+	jmp @#ZONSET
+leave: ; Exit
+	cmpb r3, #KEY3
+	bne MAINLP
+	jmp @#BOTADR ; Reboot!
+
+
+	; ----------------------------
+	; 	Writing to SMP
+	; ----------------------------
+
+MPOWRT: ; MPO writing sub-program
+	mov #cartWSMP, r1
+	call @#SETSCR
+	mov #cartPage, r1
+	call @#PAGPRT
+	; Retrieve array of file names
+	call @#EMULST
+	clr r2
+	mov @#TOTALF, r3
+	bne cntpag
+	clrb @#LISTN
+	br noncomp
+cntpag:
+	div #6, r2 ; Total pages (1 page - 6 files)
+	tst r3
+	beq noncomp
+	inc r2 ; Round if remainder is non-zero
+noncomp:
+	movb r2, @#LISTT
+	movb r2, r5
+	mov #TTBUF+2, r1
+	call @#BTOA
+	tst @#TOTALF
+	bne selint
+	call @#CLSTCL
+	mov CURSX, r5
+	mov #20, (r5)
+	add #10, r5 ; FNTSPC: Font spacing word
+	mov #13, (r5)
+	mov CURSY, r1
+	mov #32, (r1)
+	add #10, r1 ; FNTSIZ: Font size variables (2 words)
+	inc (r1)+
+	inc (r1)
+	mov r1, r4
+	mov #cartNfl, r1
+	call @PRINT
+	mov #6, (r5)
+	dec (r4)
+	dec -(r4)
+	mov #4, r1
+bigdly: ; Big delay
+	call @#TNYDLY
+	sob r1, bigdly
+	jmp @#LEVSUB
+selint:
+	call @#NEWSCR
+	clr @CURSX
+	movb @#FILPOS, r3
+	mul #10, r3
+	call @#SELINIT
+	mov #342, @#SMPCS ; Enable interrupts from the keyboard
+
+INLOOP: ; Input handling loop
+	mtps #0
+	wait
+	mtps #340
+fulllp:
+	mov #FILNUM, r0
+	mov #LISTN, r1
+	mov #FILPOS, r2
+	mov CURSY, r4
+	mov #NEWSCR, r5
+ipgu: ; Previous page
+	cmpb r3, #KEYLEFT
+	bne ipgd
+	cmpb (r1), #1
+	beq INLOOP
+	decb (r1)
+	sub #6, (r0)
+	call (r5)
+	br pggu
+ipgd: ; Next page
+	cmpb r3, #KEYRIGHT
+	bne inup
+	cmpb (r1), @#LISTT
+	beq INLOOP
+	incb (r1)
+	mov (r0), r1
+	mov @#TOTALF, r3
+	dec r3
+	add #6, r1
+	cmp r1, r3
+	ble iddo
+	sub r3, r1
+	sub r1, (r2)
+	mul #10, r1
+	sub r1, (r4)
+	mov r3, r1
+iddo:
+	mov r1, (r0)
+	call (r5)
+	br pggu
+inup: ; Previous file
+	cmpb r3, #KEYUP
+	bne indown
+	tst (r0)
+	beq INLOOP
+	cmpb (r2), #1
+	beq pgup
+	call @#MOVSEL
+	br INLOOP
+pgup:
+	cmpb (r1), #1
+	beq INLOOP
+	decb (r1)
+	movb #6, (r2)
+	dec (r0)
+	call (r5)
+	mov #60, @CURSY
+pggu:
+	clr @CURSX
+	call @#PRIVERS
+	br INLOOP
+indown: ; Next file
+	cmpb r3, #KEYDOWN
+	bne entr
+	mov @#TOTALF, r3
+	dec r3
+	cmp (r0), r3
+	beq INLOOP
+	cmpb (r2), #6
+	beq pgdn
+	call @#MOVSEL
+	br INLOOP
+pgdn:
+	cmpb (r1), @#LISTT
+	beq INLOOP
+	incb (r1)
+	movb #1, (r2)
+	inc (r0)
+	call (r5)
+	clr @CURSX
+	clr r3
+	call @#SELFRST
+	br INLOOP
+entr: ; Mount file
+	cmpb r3, #KEYENTER
+	bne mleave
+doent:
+	call @#SEEKNUM
+	mov r1, r3
+	mov (sp), r5
+	call @#EMUSEL
+	clrb @#STATEX
+	bis #41, @PRINTATTRS
+	jmp @#DOWRITE
+mleave: ; Leave to main menu
+	cmpb r3, #KEYBKSP
+	bne spage
+	jmp @#LEVSUB
+spage: ; Select page
+	cmpb r3, #KEYP
+	bne fasel
+	clr @DISCURS
+	mov #cartPage-3, r1 ; Print two spaces
+	mov @CURSY, -(sp)
+	call @#PRIAPG
+	call @DELCH
+	call @DELCH
+	clrb @#STATEX
+	mov #fszBuf, r4
+	call @#INNUMB ; Let the user input page number
+	inc @DISCURS
+	tstb @#STATEX ; If page input was cancelled?
+	bne spend
+	clrb (r4)
+	call @#ATOB
+	tst r3
+	beq spend ; Input < 1
+	cmpb r3, @#LISTT
+	bhi spend ; Input > Total lists
+	tst (sp)+
+	movb r3, @#LISTN
+	dec r3
+	mul #6, r3
+	movb @#FILPOS, r2
+	add r2, r3
+	cmp r3, @#TOTALF
+	blos svalid
+	sub @#TOTALF, r3
+	sub r3, r2
+	movb r2, @#FILPOS
+	mov @#TOTALF, r3
+svalid:
+	dec r3
+	mov r3, @#FILNUM
+	call @#NEWSCR
+	movb @#FILPOS, r3
+	mul #10, r3
+	mov r3, @CURSY
+	jmp @#pggu
+spend:
+	call @#CLSTCL
+	mov (sp)+, @CURSY
+	br INLPSC
+fasel:
+	tst @#TOTALF ; Don't check fast select if no files present
+	bne fstsl
+INLPSC: ; INLOOP branch shortcut
+	jmp @#INLOOP
+fstsl: ; Fast select by file number
+	clr r5
+fklok:
+	inc r5
+	cmpb r3, fstNLTB(r5)
+	beq fstdo
+	cmp r5, #6
+	beq INLPSC ; Keys 1-6 was not pressed
+	br fklok
+fstdo:
+	movb r5, r1
+	movb (r2), r3
+	sub r3, r1
+	movb (r0), r3
+	add r3, r1
+	mov @#TOTALF, r3
+	dec r3
+	cmpb r1, r3
+	bhi INLPSC
+	movb r1, -(sp)
+	call @#SEEKNUM
+	clr @CURSX
+	movb (r2), r3
+	mul #10, r3
+	mov r3, @CURSY
+	call @PRINT
+	movb (sp)+, (r0)
+	mul #10, r5
+	mov r5, @CURSY
+	jmp @#doent
+
+
+	; ----------------------------
+	; 	Copying between SMPs
+	; ----------------------------
+
+DOWRITE: ; SMP copying function
+	clr @#LDADR ; Beginning of the SMP
+	clr @CURSX
+	movb @#araKbs, r5
+	mov r5, -(sp) ; Total KBs
+	clr -(sp) ; Current KB
+	mov #TTKIB+2, r1
+	call @#BTOA
+	mov #TTSTR, r1
+	call @PRINT
+	sub #10, @CURSY
+
+copyloop:
+	mov #102, @CURSX
+	mov (sp), r5
+	mov #TTBUF+2, r1
+	call @#BTOA
+	call @PRINT
+
+	mov 4(sp), r5 ; SMP number
+	mov	#2000, r4 ; Number of bytes (1KB block)
+	mov	#10000, r3 ; Buffer start address
+	call @#SETCONST
+
+	mov r3, -(sp)
+	call @#LOADR ; Get data from the cart
+	mov (sp)+, r3
+
+	mov #1, r0
+	xor r0, r5 ; Switch to another SMP
+	call @#SETCONST
+	mov #SMPIO, r0
+	mov #WRADR, @#SMPCMD ; Write Address
+	call (r2)
+	movb LDADR+1, (r0) ; High address byte
+	call (r2)
+	movb LDADR, (r0) ; Low address byte
+	call (r2)
+	tst @#SMPCMD
+	call (r2)
+	; Write data
+	mov #WRINC, @#SMPCMD ; Write Postincrement
+	call (r2)
+sendoop:
+	movb (r3)+, (r0)
+	call (r2)
+	cmp r3, #12000
+	bne sendoop
+	call @#smpdone
+
+	incb (sp)
+	add #2000, @#LDADR
+	cmpb (sp), 2(sp)
+	bne copyloop
+
+	clr @CURSX
+	mov #cartDone, r1
+	mov 4(sp), r5
+	call @PRINT
+	call @#EMUUMT
+exitdl: ; Delay and reboot
+	call @#TNYDLY
+exit: ; Reboot without delay
+	jmp @#BOTADR ; Reboot!
+
+
+	; ----------------------------
+	; 	Set SMP zone
+	; ----------------------------
+
+ZONSET: ; MPO zone set sub-program
+	clr @DISCURS
+	mov #cartZSMP, r1
+	call @#SETSCR
+	mov #cartCZon, r1
+	call @PRINT
+	movb @#araKbs, r5
+	mov #TTKIB+2, r1
+	call @#BTOA
+	call @PRINT
+getsiz:
+	clr @DISIND
+	mov #cartSize, r1
+	call @PRINT
+	mov #14, @CURSX
+	mov #cartSBou, r1
+	call @#NOCRPRT
+	inc @DISIND
+	clr @CURSX
+	mov #fszBuf, r4
+	mov #fszBuf+1, r5
+	movb #377, @#STATEX
+	call @#INNUMB ; Let the user input zone size
+	tstb @#STATEX ; If user input was cancelled?
+	bne znleave
+	clrb (r4)
+	call @#ATOB
+	tst r3
+	beq getsiz; Input < 1
+	cmpb r3, #100
+	bhi getsiz; Input > 64
+	mov r3, r4
+	decb r4
+	clr @DISIND
+	movb r3, @#araKbs
+znleave:
+	jmp @#LEVSUB
+
+
+	; ----------------------------
+	; 	Variables / Strings
+	; ----------------------------
+
+TOTALF: ; Total files
+	.word 0
+FILNUM: ; File number
+	.word 0
+FILPOS: ; File position
+	.byte 1
+LISTN: ; List number
+	.byte 1
+LISTT: ; Total lists
+	.byte 1
+STATEX: ; Return status / File size packed byte
+	.byte 0
+
+fnaBuf: ; File name input buffer (new file / rename)
+	.blkb 11
+fszBuf: ; File size / page number input buffer (2 digits)
+	.blkb 3
+araKbs: ; SMP area size (KB blocks)
+	.byte 12
+
+CLBUF: ; Current page ASCII
+	.ascii \00/\
+TTBUF: ; Total pages ASCII
+	.asciz \00\
+
+TTSTR: ; Progress string
+	.ascii \  Transfr. 00/\
+TTKIB: ; Total KB ASCII
+	.asciz \00KB  \
+
+cartTitle:
+	.asciz \   SMP-MemPro 1.0   \
+cartMenu:
+	.ascii <12>\1. Write to Cartr.\<12><15>
+	.ascii \2. Custom area size \<12>
+	.ascii \3. Exit\<12><12><15>
+	.asciz \ TEID-Soft (c) 2026\
+cartNfl:
+	.asciz \NO FILES\
+cartDone:
+	.asciz \   Image written!   \
+cartPage:
+	.asciz \     Page\
+cartWSMP:
+	.asciz \  Write from image  \
+cartZSMP:
+	.asciz \ Define custom area \
+cartCZon:
+	.asciz <12>\Current area size:\<12><15>
+cartSize:
+	.asciz <12><12><15>\New area size:\<12><15>
+cartSBou:
+	.asciz \KB         (1-64)\
+
+fstNLTB: ; Scancodes for keys 0-9
+	.byte 247, 043, 103, 143, 203,
+	.byte 243, 047, 107, 147, 207
+
+
+.= 4236 ; Padding to 2.2KB
+
+END: ; Last address of the program
+	.word 0
