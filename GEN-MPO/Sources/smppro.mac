@@ -293,12 +293,6 @@ ATOB: ; Convert ASCII (2 chars) into a byte
 atbfend:
 	rts pc
 
-NOCRPRT: ; Print with temporary disabled cursor
-	inc @DISCURS ; Disable cursor
-	call @PRINT
-	clr @DISCURS ; Enable cursor
-	rts pc
-
 SETSCR: ; Prepare a screen for sub-program (clear screen)
 	mov @SCRPTR, r3
 	mov #740, r2
@@ -830,7 +824,9 @@ getsiz:
 	call @PRINT
 	mov #14, @CURSX
 	mov #cartSBou, r1
-	call @#NOCRPRT
+	inc @DISCURS ; Disable cursor
+	call @PRINT
+	clr @DISCURS ; Enable cursor
 	inc @DISIND
 	clr @CURSX
 	mov #fszBuf, r4
@@ -870,9 +866,7 @@ LISTT: ; Total lists
 STATEX: ; Return status / File size packed byte
 	.byte 0
 
-fnaBuf: ; File name input buffer (new file / rename)
-	.blkb 11
-fszBuf: ; File size / page number input buffer (2 digits)
+fszBuf: ; Area size / page number input buffer (2 digits)
 	.blkb 3
 araKbs: ; SMP area size (KB blocks)
 	.byte 12
